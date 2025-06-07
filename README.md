@@ -1,6 +1,6 @@
 # JsonRemedy
 
-[![GitHub CI](https://github.com/nshkrdotcom/json_remedy/actions/workflows/ci.yml/badge.svg)](https://github.com/nshkrdotcom/json_remedy/actions/workflows/ci.yml)
+[![GitHub CI](https://github.com/nshkrdotcom/json_remedy/actions/workflows/elixir.yaml/badge.svg)](https://github.com/nshkrdotcom/json_remedy/actions/workflows/elixir.yaml)
 [![Elixir](https://img.shields.io/badge/elixir-%3E%3D1.14-blueviolet.svg)](https://elixir-lang.org)
 [![OTP](https://img.shields.io/badge/otp-%3E%3D24-blue.svg)](https://erlang.org)
 [![Hex.pm](https://img.shields.io/hexpm/v/json_remedy.svg)](https://hex.pm/packages/json_remedy)
