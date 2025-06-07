@@ -1,10 +1,11 @@
 # JsonRemedy
 
-<!--
+[![GitHub CI](https://github.com/nshkrdotcom/json_remedy/actions/workflows/ci.yml/badge.svg)](https://github.com/nshkrdotcom/json_remedy/actions/workflows/ci.yml)
+[![Elixir](https://img.shields.io/badge/elixir-%3E%3D1.14-blueviolet.svg)](https://elixir-lang.org)
+[![OTP](https://img.shields.io/badge/otp-%3E%3D24-blue.svg)](https://erlang.org)
 [![Hex.pm](https://img.shields.io/hexpm/v/json_remedy.svg)](https://hex.pm/packages/json_remedy)
-[![Elixir CI](https://github.com/user/json_remedy/actions/workflows/elixir.yml/badge.svg)](https://github.com/user/json_remedy/actions/workflows/elixir.yml)
 [![Hex Docs](https://img.shields.io/badge/hex-docs-lightgreen.svg)](https://hexdocs.pm/json_remedy/)
--->
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 A blazingly fast, Elixir-native JSON repair library that intelligently fixes malformed JSON strings using the power of binary pattern matching and functional composition. Inspired by the Python [json-repair](https://github.com/mangiucugna/json_repair) library, but completely reimagined to leverage Elixir's unique strengths.
 

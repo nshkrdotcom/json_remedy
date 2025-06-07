@@ -2,7 +2,7 @@ defmodule JsonRemedy.MixProject do
   use Mix.Project
 
   @version "0.1.0"
-  @source_url "https://github.com/user/json_remedy"
+  @source_url "https://github.com/nshkrdotcom/json_remedy"
 
   def project do
     [
@@ -11,7 +11,7 @@ defmodule JsonRemedy.MixProject do
       elixir: "~> 1.14",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      description: "A library to repair broken JSON strings, ported from Python's json-repair.",
+      description: "A blazingly fast Elixir library for repairing malformed JSON using binary pattern matching. Handles LLM outputs, legacy data, and broken JSON with intelligent context-aware fixes.",
       package: package(),
       docs: docs(),
       escript: escript(),
@@ -48,9 +48,13 @@ defmodule JsonRemedy.MixProject do
 
   defp package do
     [
-      maintainers: ["Your Name"],
+      maintainers: ["nshkrdotcom"],
       licenses: ["MIT"],
-      links: %{"GitHub" => @source_url}
+      links: %{
+        "GitHub" => @source_url,
+        "Documentation" => "https://hexdocs.pm/json_remedy"
+      },
+      files: ~w(lib .formatter.exs mix.exs README.md LICENSE)
     ]
   end
 
