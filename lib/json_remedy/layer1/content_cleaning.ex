@@ -298,11 +298,6 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
     String.starts_with?(line, "```") or String.starts_with?(line, "``")
   end
 
-  defp fence_has_language?(line) do
-    trimmed = String.trim_leading(line, "`")
-    trimmed != "" and not String.starts_with?(trimmed, "\n")
-  end
-
   defp extract_malformed_fence_content(input) do
     # Handle cases like ```json\n{content} or {content}\n```
     cond do
@@ -517,7 +512,7 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
           do: close_pos,
           else: find_matching_block_comment_end(input, close_pos + 2, nesting_level - 1)
 
-      {open_pos, nil} ->
+      {_open_pos, nil} ->
         nil
 
       {open_pos, close_pos} when open_pos < close_pos ->

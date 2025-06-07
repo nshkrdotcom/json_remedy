@@ -1014,20 +1014,6 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
     end
   end
 
-  # Find the last occurrence of a colon in a string
-  defp find_last_colon_position(content) do
-    find_last_colon_position(content, String.length(content) - 1, :not_found)
-  end
-
-  defp find_last_colon_position(_content, pos, found) when pos < 0, do: found
-
-  defp find_last_colon_position(content, pos, _found) do
-    case String.at(content, pos) do
-      ":" -> {:found, pos}
-      _ -> find_last_colon_position(content, pos - 1, :not_found)
-    end
-  end
-
   defp consume_number_in_add_commas(content, offset) do
     case String.at(content, offset) do
       nil ->

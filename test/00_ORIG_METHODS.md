@@ -1,0 +1,93 @@
+Of course. Here is an exhaustive and complete list of the repair methods, techniques, and heuristics used in the `json-repair` library, based on a detailed analysis of the provided codebase.
+
+### Core Parsing Strategy: A Custom Recursive Descent Parser
+
+The library's fundamental approach is a custom-built, single-pass, recursive descent parser located in `src/json_repair/json_parser.py`. It **does not use any regular expressions (regex)**. This design choice allows for fine-grained, character-by-character control and context-aware decision-making, which is essential for repairing structurally ambiguous text.
+
+The `JSONParser` class maintains its state through:
+*   `self.index`: The current character position in the input string.
+*   `self.context`: A state machine (`JsonContext`) that tracks whether the parser is expecting an `OBJECT_KEY`, `OBJECT_VALUE`, or an `ARRAY` element. This context is critical for resolving ambiguity.
+
+---
+
+### I. Structural Repairs (Objects & Arrays)
+
+These methods fix the fundamental structure of the JSON document, including braces, brackets, and delimiters.
+
+1.  **Adding Missing Closing Braces/Brackets (`}` or `]`):**
+    *   **Method:** The parser's main loops in `parse_object` and `parse_array` are designed to terminate when they either find the correct closing delimiter or reach the end of the input string (`EOF`). If EOF is reached while inside an object or array, the parser gracefully concludes, effectively adding the missing closing delimiter.
+
+2.  **Handling Missing Commas Between Elements:**
+    *   **Method:** The parsing loops for objects and arrays do not strictly enforce commas. After parsing one element, the parser skips whitespace and immediately looks for the next valid element (e.g., a string key in an object, or any value in an array). This implicitly handles missing commas.
+
+3.  **Ignoring Trailing Commas:**
+    *   **Method:** A trailing comma (e.g., `[1, 2, ]`) is handled naturally. The parser consumes the comma, and on the next iteration of the loop, it finds the closing delimiter (`]`) and correctly terminates the array parsing.
+
+4.  **Fixing Misplaced Colons for Commas:**
+    *   **Method:** In `parse_object`, if the parser expects a comma but finds a colon (`:`), it logs the event, consumes the colon, and continues parsing as if it were a comma. This handles errors like `{"a": 1 : "b": 2}`.
+
+5.  **Adding Missing Opening Braces (`{`):**
+    *   **Method:** Inside `parse_array`, when parsing a potential string value, the parser performs a lookahead. If it detects that the string is immediately followed by a colon (`:`), it aborts parsing a string and instead calls `self.parse_object()`, effectively inserting the missing opening brace. This fixes arrays like `["key": "value"]` into `[{"key": "value"}]`.
+
+6.  **Wrapping Concatenated/Multiple JSON Objects:**
+    *   **Method:** The main `parse()` method repeatedly calls `parse_json()` in a loop. If it successfully parses multiple top-level JSON objects from the input string (e.g., `{"a":1}{"b":2}`), it collects them into a Python list and returns that, effectively creating a JSON array `[{"a":1},{"b":2}]`.
+
+7.  **Merging Consecutive Arrays in an Object (Edge Case):**
+    *   **Method:** In `parse_object`, there is a highly specific check. If the previously parsed value was an array, and the parser encounters an opening bracket `[` for a new array without a key, it will parse this new array and merge its contents with the previous array.
+
+### II. String and Quoting Repairs
+
+This is the most complex area, with numerous heuristics to fix malformed strings and inconsistent quoting, common in LLM outputs.
+
+8.  **Supporting Multiple Quote Types:**
+    *   **Method:** The parser recognizes standard double quotes (`"`), single quotes (`'`), and curly smart quotes (`“` and `”`) as valid string delimiters, defined in `STRING_DELIMITERS`. The final repaired JSON string will normalize these to standard double quotes.
+
+9.  **Adding Missing Quotes to Keys and Values:**
+    *   **Method:** The `parse_string` function can infer unquoted strings. If it encounters a character that is not a delimiter but is a valid start of a literal (e.g., a letter), it sets a `missing_quotes` flag. It then determines the end of this "string" by looking for structural characters that are invalid within a string, such as `:`, `,`, `}`, or `]`, based on the current `self.context`.
+
+10. **Fixing Missing Closing Quotes:**
+    *   **Method:** When parsing a quoted string, if the parser reaches the end of the input or a structural delimiter without finding a closing quote, it uses the `rstring_delimiter_missing` flag. It then intelligently terminates the string at the character just before the delimiter, effectively adding the closing quote.
+
+11. **Handling Unescaped Inner Quotes:**
+    *   **Method:** The parser attempts to handle unescaped quotes within a string (e.g., `{"key": "This is a "test""}`). It uses a flag `unmatched_delimiter` to track quote parity. If it encounters a quote that is not followed by a structural character (like a comma or colon), it often assumes it's part of the string content and continues parsing.
+
+12. **Handling Doubled Quotes:**
+    *   **Method:** The parser has a `doubled_quotes` flag to correctly handle and clean up cases where quotes are unnecessarily doubled, such as `""key"": ""value""`.
+
+13. **Parsing and Normalizing Escape Sequences:**
+    *   **Method:** When a backslash `\` is encountered inside a string, the parser correctly handles standard sequences (`\n`, `\t`, `\r`, `\b`, `\"`, `\\`) and Unicode escape sequences (`\uXXXX` and `\xXX`), converting them to their literal character representation.
+
+14. **Removing Trailing Backslashes from Unterminated Strings:**
+    *   **Method:** If a string is unterminated and the last character is a backslash `\` (a common streaming artifact), the parser will remove it to prevent creating an invalid escape sequence. This behavior is controlled by the `stream_stable` flag.
+
+15. **Trimming Whitespace from Unclosed Strings:**
+    *   **Method:** If a string is repaired due to a missing closing quote, trailing whitespace is automatically removed from the string's content before it is finalized. This is also controlled by the `stream_stable` flag.
+
+### III. Value and Data-Type Repairs
+
+These methods focus on correctly identifying and parsing primitive JSON values.
+
+16. **Case-Insensitive Boolean and Null Parsing:**
+    *   **Method:** The `parse_boolean_or_null` function matches the literals `true`, `false`, and `null` in a case-insensitive manner by converting the input segment to lowercase before comparison.
+
+17. **Lenient Number Parsing:**
+    *   **Method:** The `parse_number` function greedily consumes characters that are valid in a number (`0-9`, `-`, `.`, `e`, `E`). If it stops on an invalid character (like a comma in `123,456`), it backtracks one position to parse only the valid part (`123`).
+
+18. **Fallback for Malformed Numbers:**
+    *   **Method:** After parsing a potential number string (e.g., `"1.2.3"`), `parse_number` attempts to convert it to a `float` or `int`. If a `ValueError` or `TypeError` occurs, instead of failing, it returns the malformed number as a string value, preserving the data.
+
+19. **Distinguishing Unquoted Literals from Strings:**
+    *   **Method:** In `parse_string`, before assuming an unquoted literal is a string, it first attempts to parse it as a boolean or null using `parse_boolean_or_null`. This ensures `true` becomes a boolean, not the string `"true"`.
+
+### IV. Content Sanitization and Cleaning
+
+These methods make the parser robust against non-JSON content mixed in with the data.
+
+20. **Stripping Comments:**
+    *   **Method:** The `parse_comment` function is called when a `/` or `#` is encountered. It correctly identifies and skips over single-line comments (`//...` and `#...`) and multi-line block comments (`/*...*/`). The parser's index is advanced past the comment, effectively removing it from the final output.
+
+21. **Ignoring Leading/Trailing Extraneous Characters:**
+    *   **Method:** The main parsing loop is designed to skip any characters at the beginning of the input that do not signify the start of a valid JSON value (`{`, `[`, `"`, etc.). This cleans up leading text or garbage. Trailing characters are similarly ignored after a valid JSON object has been parsed.
+
+22. **Stripping Markdown Code Fences:**
+    *   **Method:** The `JSONParser`'s `__init__` method checks if the input string contains Markdown code fences (e.g., ` ```json ... ``` `). If detected, it slices the string to extract only the content within the fences before parsing begins.
