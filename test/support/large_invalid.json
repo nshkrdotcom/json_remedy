@@ -1,0 +1,52 @@
+{
+  users: [
+    {
+      id: 1,
+      name: "John Doe",
+      email: 'john@example.com',
+      profile: {
+        age: 30,
+        city: "New York",
+        interests: ["programming", "music", "travel",]
+      },
+      settings: {
+        notifications: True,
+        theme: "dark",
+        language: "en"
+      }
+    },
+    {
+      id: 2,
+      name: "Jane Smith",
+      email: "jane@example.com",
+      profile: {
+        age: 28,
+        city: "San Francisco",
+        interests: ["design", "photography", "cooking"]
+      },
+      settings: {
+        notifications: False,
+        theme: "light",
+        language: "en"
+      }
+    },
+    {
+      id: 3,
+      name: "Bob Johnson" 
+      email: "bob@example.com",
+      profile: {
+        age: 35,
+        city: "Chicago",
+        interests: ["sports", "reading", "gaming"]
+      },
+      settings: {
+        notifications: None,
+        theme: "auto",
+        language: "en"
+      }
+    }
+  ],
+  metadata: {
+    version: "1.0",
+    created: "2024-01-01T00:00:00Z",
+    total_users: 3
