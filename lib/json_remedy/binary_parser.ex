@@ -5,16 +5,24 @@ defmodule JsonRemedy.BinaryParser do
   This module uses Elixir's advanced binary pattern matching to parse and repair
   JSON without character-by-character iteration. Each function clause matches
   specific binary patterns, making parsing extremely efficient.
+
+  See `@type parse_context` for the context structure used during parsing.
+  See `@type parse_result` for the intermediate parsing result type.
+  See `@type repair_result` for the final repair result type.
   """
 
+  # Type definitions
+  @type json_value ::
+          nil | boolean() | number() | String.t() | [json_value()] | %{String.t() => json_value()}
+  @type repair_log :: String.t()
   @type parse_context :: %{
-          repairs: [String.t()],
+          repairs: [repair_log()],
           position: non_neg_integer(),
           strict: boolean()
         }
-
-  @type parse_result :: {term(), binary(), parse_context()}
-  @type repair_result :: {:ok, term()} | {:ok, term(), [String.t()]} | {:error, String.t()}
+  @type parse_result :: {json_value(), binary(), parse_context()}
+  @type repair_result ::
+          {:ok, json_value()} | {:ok, json_value(), [repair_log()]} | {:error, String.t()}
 
   @doc """
   Main entry point for binary pattern matching repair.

@@ -5,9 +5,16 @@ defmodule JsonRemedy.Pipeline do
   This approach processes JSON repair as a stream of transformations,
   making it suitable for large files or real-time processing.
   Currently a placeholder for future implementation.
+
+  See `@type repair_result` for the return type specification.
   """
 
-  @type repair_result :: {:ok, term()} | {:ok, term(), [String.t()]} | {:error, String.t()}
+  # Type definitions
+  @type json_value ::
+          nil | boolean() | number() | String.t() | [json_value()] | %{String.t() => json_value()}
+  @type repair_log :: String.t()
+  @type repair_result ::
+          {:ok, json_value()} | {:ok, json_value(), [repair_log()]} | {:error, String.t()}
 
   @doc """
   Repairs JSON using stream processing approach.

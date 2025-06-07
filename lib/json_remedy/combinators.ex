@@ -6,9 +6,16 @@ defmodule JsonRemedy.Combinators do
   that can each handle and repair specific syntax issues. While more
   elegant than direct parsing, it's currently a placeholder for future
   implementation.
+
+  See `@type repair_result` for the return type specification.
   """
 
-  @type repair_result :: {:ok, term()} | {:ok, term(), [String.t()]} | {:error, String.t()}
+  # Type definitions
+  @type json_value ::
+          nil | boolean() | number() | String.t() | [json_value()] | %{String.t() => json_value()}
+  @type repair_log :: String.t()
+  @type repair_result ::
+          {:ok, json_value()} | {:ok, json_value(), [repair_log()]} | {:error, String.t()}
 
   @doc """
   Repairs JSON using parser combinator approach.

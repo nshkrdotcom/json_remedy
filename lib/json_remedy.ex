@@ -5,6 +5,12 @@ defmodule JsonRemedy do
   JsonRemedy uses advanced binary pattern matching and functional composition
   to intelligently repair malformed JSON strings while achieving superior performance.
 
+  This module provides the main API for JSON repair functionality. It supports
+  multiple repair strategies and can handle various types of malformed JSON.
+
+  See `@type json_value` for the type specification of parsed JSON values.
+  See `@type repair_result` for the main return type specifications.
+
   ## Examples
 
       iex> JsonRemedy.repair(~s|{name: "Alice", age: 30, active: True}|)
@@ -21,8 +27,12 @@ defmodule JsonRemedy do
   alias JsonRemedy.Combinators
   alias JsonRemedy.Pipeline
 
-  @type repair_result :: {:ok, term()} | {:error, String.t()}
-  @type repair_result_with_logs :: {:ok, term(), [String.t()]} | {:error, String.t()}
+  # Type definitions
+  @type json_value ::
+          nil | boolean() | number() | String.t() | [json_value()] | %{String.t() => json_value()}
+  @type repair_log :: String.t()
+  @type repair_result :: {:ok, json_value()} | {:error, String.t()}
+  @type repair_result_with_logs :: {:ok, json_value(), [repair_log()]} | {:error, String.t()}
   @type strategy :: :binary_patterns | :combinators | :streaming
   @type option :: {:logging, boolean()} | {:strategy, strategy()} | {:strict, boolean()}
 
