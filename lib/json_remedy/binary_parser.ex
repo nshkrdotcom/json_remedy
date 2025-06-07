@@ -8,10 +8,10 @@ defmodule JsonRemedy.BinaryParser do
   """
 
   @type parse_context :: %{
-    repairs: [String.t()],
-    position: non_neg_integer(),
-    strict: boolean()
-  }
+          repairs: [String.t()],
+          position: non_neg_integer(),
+          strict: boolean()
+        }
 
   @type parse_result :: {term(), binary(), parse_context()}
   @type repair_result :: {:ok, term()} | {:ok, term(), [String.t()]} | {:error, String.t()}
@@ -40,8 +40,9 @@ defmodule JsonRemedy.BinaryParser do
 
     {preprocessed_json, preprocessing_repairs} = preprocess_json_with_logging(json)
 
-    context_with_preprocessing = %{initial_context |
-      repairs: if(logging, do: preprocessing_repairs, else: [])
+    context_with_preprocessing = %{
+      initial_context
+      | repairs: if(logging, do: preprocessing_repairs, else: [])
     }
 
     # After preprocessing, try Jason first since it's much faster and more reliable
@@ -52,11 +53,8 @@ defmodule JsonRemedy.BinaryParser do
         else
           {:ok, result}
         end
-      {:error, jason_error} ->
-        # Debug: Log why Jason failed after preprocessing
-        IO.puts("DEBUG: Jason failed on preprocessed JSON: #{preprocessed_json}")
-        IO.puts("DEBUG: Jason error: #{inspect(jason_error)}")
 
+      {:error, _jason_error} ->
         # Preprocessing didn't fully fix it, use our binary parser
         preprocessed_json
         |> parse_value(context_with_preprocessing)
@@ -122,59 +120,76 @@ defmodule JsonRemedy.BinaryParser do
     # Step 1: Fix single quotes to double quotes for strings
     prev_json = json
     json = String.replace(json, ~r/'([^']*)'/, ~S("\1"))
-    repairs = if json != prev_json, do: ["converted single quotes to double quotes" | repairs], else: repairs
 
-    # Step 2: Fix missing quotes in common patterns like "Alice, "age" -> "Alice", "age"
-    prev_json = json
-    json = String.replace(json, ~r/"([^"]*),\s*"([a-zA-Z_][a-zA-Z0-9_]*)"/, ~S("\1", "\2"))
-    repairs = if json != prev_json, do: ["fixed missing quote and comma" | repairs], else: repairs
+    repairs =
+      if json != prev_json,
+        do: ["converted single quotes to double quotes" | repairs],
+        else: repairs
 
-    # Step 3: Fix unquoted keys (only at start of object or after comma)
+    # Step 2: Fix unquoted keys (only at start of object or after comma)
     prev_json = json
     json = String.replace(json, ~r/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/, ~S(\1"\2":))
     repairs = if json != prev_json, do: ["quoted unquoted keys" | repairs], else: repairs
 
-    # Step 4: Fix boolean variants (word boundaries to be safe)
+    # Step 3: Fix boolean variants (word boundaries to be safe)
     prev_json = json
     json = String.replace(json, ~r/\bTrue\b/, "true")
     json = String.replace(json, ~r/\bFalse\b/, "false")
     repairs = if json != prev_json, do: ["fixed boolean variants" | repairs], else: repairs
 
-    # Step 5: Fix null variants (word boundaries to be safe)
+    # Step 4: Fix null variants (word boundaries to be safe)
     prev_json = json
     json = String.replace(json, ~r/\bNone\b/, "null")
     json = String.replace(json, ~r/\bNULL\b/, "null")
     json = String.replace(json, ~r/\bNull\b/, "null")
     repairs = if json != prev_json, do: ["fixed null variants" | repairs], else: repairs
 
-    # Step 6: Fix missing colons between adjacent quoted strings (safe pattern)
+    # Step 5: Fix missing colons and commas between quoted strings
+    # Pattern 1: Missing colon between key and value (after { or , and before ,})
     prev_json = json
-    json = String.replace(json, ~r/"(\s+)"/, fn match ->
-      # Only replace if it's just whitespace between quotes
-      if String.trim(match) == ~S("") do
-        ~S(": ")
-      else
-        match
-      end
-    end)
-    repairs = if json != prev_json, do: ["added missing colons" | repairs], else: repairs
+    json = String.replace(json, ~r/([{,]\s*)"([^"]*)"(\s+)"([^"]*)"(\s*[,}])/, ~S(\1"\2": "\4"\5))
+    repairs = if json != prev_json, do: ["added missing colon" | repairs], else: repairs
 
-    # Step 7: Fix missing commas in arrays (safe pattern for numbers)
+    # Pattern 2: Missing colon between key and number/literal (before end of object)
+    prev_json = json
+    json = String.replace(json, ~r/([{,]\s*)"([^"]*)"(\s+)([^",}\s]+)(\s*[,}])/, ~S(\1"\2": \4\5))
+    repairs = if json != prev_json, do: ["added missing colon" | repairs], else: repairs
+
+    # Pattern 3: Missing comma between values (not after { or ,)
+    prev_json = json
+    json = String.replace(json, ~r/: "([^"]*)"(\s+)"([^"]*)"/, ~S(: "\1", "\3"))
+    repairs = if json != prev_json, do: ["added missing comma" | repairs], else: repairs
+
+    # Step 6: Fix missing commas in arrays (safe pattern for numbers)
     prev_json = json
     json = String.replace(json, ~r/(\d)\s+(\d)/, "\\1, \\2")
-    repairs = if json != prev_json, do: ["added missing commas in arrays" | repairs], else: repairs
 
-    # Step 8: Fix trailing commas (this is safe)
+    repairs =
+      if json != prev_json, do: ["added missing commas in arrays" | repairs], else: repairs
+
+    # Step 7: Fix trailing commas (this is safe)
     prev_json = json
     json = String.replace(json, ~r/,(\s*[}\]])/, "\\1")
     repairs = if json != prev_json, do: ["removed trailing comma" | repairs], else: repairs
 
-    # Step 9: Fix missing commas between objects/arrays (this is safe)
+    # Step 8: Fix missing commas between objects/arrays (this is safe)
     prev_json = json
     json = String.replace(json, ~r/([}\]])(\s*)([{\[])/, "\\1,\\2\\3")
-    repairs = if json != prev_json, do: ["added missing comma between structures" | repairs], else: repairs
 
-    # That's it! Let the binary parser handle complex cases like unquoted strings
+    repairs =
+      if json != prev_json,
+        do: ["added missing comma between structures" | repairs],
+        else: repairs
+
+    # Step 9: Fix missing closing quotes only when there's a clear issue (be very careful)
+    # Only fix patterns that look like missing quotes: "Alice, "age" -> "Alice", "age"
+    # But NOT valid JSON like: 1, "b"
+    prev_json = json
+
+    json =
+      String.replace(json, ~r/"([a-zA-Z][^"]*),\s*"([a-zA-Z_][a-zA-Z0-9_]*)"/, ~S("\1", "\2"))
+
+    repairs = if json != prev_json, do: ["fixed missing closing quote" | repairs], else: repairs
 
     {json, repairs}
   end
@@ -198,6 +213,7 @@ defmodule JsonRemedy.BinaryParser do
     case skip_block_comment(rest) do
       {:ok, new_rest} ->
         parse_value(new_rest, add_repair(ctx, "removed block comment"))
+
       {:error, reason} ->
         {:error, reason}
     end
@@ -237,12 +253,14 @@ defmodule JsonRemedy.BinaryParser do
   end
 
   # Unquoted strings - only in non-strict mode
-  defp parse_value(<<char, _::binary>> = input, %{strict: false} = ctx) when char in ?a..?z or char in ?A..?Z or char == ?_ do
+  defp parse_value(<<char, _::binary>> = input, %{strict: false} = ctx)
+       when char in ?a..?z or char in ?A..?Z or char == ?_ do
     parse_unquoted_string(input, ctx, [])
   end
 
   # Unquoted strings - also try in strict mode for certain patterns
-  defp parse_value(<<char, _::binary>> = input, ctx) when char in ?a..?z or char in ?A..?Z or char == ?_ do
+  defp parse_value(<<char, _::binary>> = input, ctx)
+       when char in ?a..?z or char in ?A..?Z or char == ?_ do
     # Try to parse as unquoted string and repair
     parse_unquoted_string(input, ctx, [])
   end
@@ -282,13 +300,15 @@ defmodule JsonRemedy.BinaryParser do
         rest = skip_whitespace(rest, new_ctx)
 
         # Handle colon
-        {rest, new_ctx} = case rest do
-          <<":", rest::binary>> ->
-            {skip_whitespace(rest, new_ctx), new_ctx}
-          rest ->
-            # Missing colon - repair it
-            {skip_whitespace(rest, new_ctx), add_repair(new_ctx, "added missing colon")}
-        end
+        {rest, new_ctx} =
+          case rest do
+            <<":", rest::binary>> ->
+              {skip_whitespace(rest, new_ctx), new_ctx}
+
+            rest ->
+              # Missing colon - repair it
+              {skip_whitespace(rest, new_ctx), add_repair(new_ctx, "added missing colon")}
+          end
 
         # Parse value
         case parse_value(rest, new_ctx) do
@@ -412,7 +432,8 @@ defmodule JsonRemedy.BinaryParser do
     parse_number_chars(input, ctx, acc)
   end
 
-  defp parse_number_chars(<<char, rest::binary>>, ctx, acc) when char in ?0..?9 or char in [?-, ?+, ?., ?e, ?E] do
+  defp parse_number_chars(<<char, rest::binary>>, ctx, acc)
+       when char in ?0..?9 or char in [?-, ?+, ?., ?e, ?E] do
     parse_number_chars(rest, %{ctx | position: ctx.position + 1}, [char | acc])
   end
 
@@ -427,7 +448,8 @@ defmodule JsonRemedy.BinaryParser do
   end
 
   # Unquoted string parsing (for non-strict mode or repair)
-  defp parse_unquoted_string(<<char, rest::binary>>, ctx, acc) when char in ?a..?z or char in ?A..?Z or char in ?0..?9 or char in [?_, ?-, ?\s] do
+  defp parse_unquoted_string(<<char, rest::binary>>, ctx, acc)
+       when char in ?a..?z or char in ?A..?Z or char in ?0..?9 or char in [?_, ?-, ?\s] do
     # Allow spaces in unquoted strings (like "New York")
     parse_unquoted_string(rest, %{ctx | position: ctx.position + 1}, [char | acc])
   end
@@ -507,18 +529,17 @@ defmodule JsonRemedy.BinaryParser do
   defp escape_char(char), do: char
 
   defp parse_number_value(string) do
-    cond do
-      String.contains?(string, ".") or String.contains?(string, "e") or String.contains?(string, "E") ->
-        case Float.parse(string) do
-          {float, ""} -> {:ok, float}
-          _ -> {:error, :invalid_float}
-        end
-
-      true ->
-        case Integer.parse(string) do
-          {int, ""} -> {:ok, int}
-          _ -> {:error, :invalid_integer}
-        end
+    if String.contains?(string, ".") or String.contains?(string, "e") or
+         String.contains?(string, "E") do
+      case Float.parse(string) do
+        {float, ""} -> {:ok, float}
+        _ -> {:error, :invalid_float}
+      end
+    else
+      case Integer.parse(string) do
+        {int, ""} -> {:ok, int}
+        _ -> {:error, :invalid_integer}
+      end
     end
   end
 

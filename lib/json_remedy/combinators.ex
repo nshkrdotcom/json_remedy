@@ -8,13 +8,30 @@ defmodule JsonRemedy.Combinators do
   implementation.
   """
 
+  @type repair_result :: {:ok, term()} | {:ok, term(), [String.t()]} | {:error, String.t()}
+
   @doc """
   Repairs JSON using parser combinator approach.
 
   Currently delegates to BinaryParser but will be implemented
   as a proper combinator-based parser in Phase 2.
+
+  ## Parameters
+  - `json_string`: The malformed JSON string to repair
+  - `opts`: Keyword list of options
+
+  ## Returns
+  - `{:ok, term()}` if repair succeeds without logging
+  - `{:ok, term(), [String.t()]}` if repair succeeds with logging enabled
+  - `{:error, String.t()}` if repair fails
+
+  ## Examples
+
+      iex> JsonRemedy.Combinators.repair(~s|{name: "Alice"}|, [])
+      {:ok, %{"name" => "Alice"}}
   """
-  def repair(json_string, opts) do
+  @spec repair(binary(), keyword()) :: repair_result()
+  def repair(json_string, opts) when is_binary(json_string) and is_list(opts) do
     # TODO: Implement parser combinator approach
     # For now, delegate to binary parser
     JsonRemedy.BinaryParser.repair(json_string, opts)

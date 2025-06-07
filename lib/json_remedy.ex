@@ -14,7 +14,7 @@ defmodule JsonRemedy do
       {:ok, "[1,2,3]"}
 
       iex> JsonRemedy.repair(~s|{incomplete: "data"|, logging: true)
-      {:ok, %{"incomplete" => "data"}, ["added missing closing brace"]}
+      {:ok, %{"incomplete" => "data"}, ["quoted unquoted keys", "added missing closing brace"]}
   """
 
   alias JsonRemedy.BinaryParser
@@ -57,6 +57,7 @@ defmodule JsonRemedy do
     case Jason.decode(json_string) do
       {:ok, result} ->
         if logging, do: {:ok, result, []}, else: {:ok, result}
+
       {:error, _} ->
         # Standard parsing failed, use repair strategy
         apply_repair_strategy(strategy, json_string, opts)
@@ -79,8 +80,10 @@ defmodule JsonRemedy do
     case repair(json_string, opts) do
       {:ok, term} ->
         {:ok, Jason.encode!(term)}
+
       {:ok, term, _repairs} ->
         {:ok, Jason.encode!(term)}
+
       {:error, reason} ->
         {:error, reason}
     end
@@ -95,7 +98,7 @@ defmodule JsonRemedy do
       {:ok, %{"setting" => "value"}}
 
       iex> JsonRemedy.from_file("malformed.json", logging: true)
-      {:ok, %{"data" => "value"}, ["quoted unquoted keys", "added missing comma"]}
+      {:ok, %{"data" => "value"}, ["quoted unquoted string", "added missing colon"]}
   """
   @spec from_file(Path.t(), [option()]) :: repair_result() | repair_result_with_logs()
   def from_file(path, opts \\ []) do

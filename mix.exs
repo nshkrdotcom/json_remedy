@@ -17,6 +17,11 @@ defmodule JsonRemedy.MixProject do
       escript: escript(),
       aliases: [
         test: "test --no-start"
+      ],
+      dialyzer: [
+        plt_add_deps: :apps_direct,
+        plt_add_apps: [:mix, :jason],
+        flags: [:error_handling, :underspecs]
       ]
     ]
   end
@@ -32,6 +37,7 @@ defmodule JsonRemedy.MixProject do
       {:jason, "~> 1.4"},
       {:benchee, "~> 1.1", only: :dev},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.3", only: [:dev], runtime: false},
       {:ex_doc, "~> 0.30", only: :dev, runtime: false}
     ]
   end
@@ -57,4 +63,3 @@ defmodule JsonRemedy.MixProject do
     ]
   end
 end
-

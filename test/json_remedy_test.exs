@@ -30,7 +30,9 @@ defmodule JsonRemedyTest do
 
     test "repairs null variants" do
       malformed = ~s|{"value": None, "other": NULL, "another": Null}|
-      assert {:ok, %{"value" => nil, "other" => nil, "another" => nil}} = JsonRemedy.repair(malformed)
+
+      assert {:ok, %{"value" => nil, "other" => nil, "another" => nil}} =
+               JsonRemedy.repair(malformed)
     end
   end
 
@@ -80,6 +82,7 @@ defmodule JsonRemedyTest do
       {"name": "Alice"}
       ```
       """
+
       assert {:ok, %{"name" => "Alice"}} = JsonRemedy.repair(malformed)
     end
 
@@ -97,8 +100,9 @@ defmodule JsonRemedyTest do
   describe "logging functionality" do
     test "returns repair actions when logging enabled" do
       malformed = ~s|{name: "Alice", age: 30, active: True}|
+
       assert {:ok, %{"name" => "Alice", "age" => 30, "active" => true}, repairs} =
-        JsonRemedy.repair(malformed, logging: true)
+               JsonRemedy.repair(malformed, logging: true)
 
       assert is_list(repairs)
       assert length(repairs) > 0
@@ -131,8 +135,10 @@ defmodule JsonRemedyTest do
   describe "additional repairs" do
     test "missing and mixed quotes" do
       assert JsonRemedy.repair("{'key': 'string'}") == {:ok, %{"key" => "string"}}
+
       assert JsonRemedy.repair(~s|{"name": "John", "age": 30, city: "New York"}|) ==
                {:ok, %{"name" => "John", "age" => 30, "city" => "New York"}}
+
       assert JsonRemedy.repair(~s|{"name": "John", "age": 30, "city": New York}|) ==
                {:ok, %{"name" => "John", "age" => 30, "city" => "New York"}}
     end
