@@ -171,7 +171,7 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
   Return the priority order for this layer.
   Layer 1 (Content Cleaning) should run first in the pipeline.
   """
-  @spec priority() :: non_neg_integer()
+  @spec priority() :: 1
   def priority, do: 1
 
   @doc """

@@ -60,7 +60,7 @@ defmodule JsonRemedy.Layer1.ContentCleaningTest do
       ```
       """
 
-      {:ok, result, context} = ContentCleaning.process(input, %{repairs: [], options: []})
+      {:ok, result, _context} = ContentCleaning.process(input, %{repairs: [], options: []})
 
       # Should remove outer fences but preserve inner content
       assert String.contains?(result, "Code block: ```python")
@@ -122,7 +122,7 @@ defmodule JsonRemedy.Layer1.ContentCleaningTest do
     test "handles nested block comments" do
       input = "{\"name\": \"Alice\" /* outer /* inner */ still outer */}"
 
-      {:ok, result, context} = ContentCleaning.process(input, %{repairs: [], options: []})
+      {:ok, result, _context} = ContentCleaning.process(input, %{repairs: [], options: []})
 
       assert String.contains?(result, "Alice")
       assert not String.contains?(result, "outer")
@@ -153,7 +153,7 @@ defmodule JsonRemedy.Layer1.ContentCleaningTest do
       Second user: {"name": "Bob"}
       """
 
-      {:ok, result, context} = ContentCleaning.process(input, %{repairs: [], options: []})
+      {:ok, result, _context} = ContentCleaning.process(input, %{repairs: [], options: []})
 
       # Should extract the first complete JSON object
       assert String.contains?(result, "Alice")

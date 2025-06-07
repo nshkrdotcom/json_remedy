@@ -139,7 +139,7 @@ defmodule JsonRemedy.Layer2.StructuralRepairTest do
       # Input that would confuse a simple parser
       input = "{\"key\": \"val}ue\", \"other\": \"data\"}"
 
-      {:ok, result, context} = StructuralRepair.process(input, %{repairs: [], options: []})
+      {:ok, result, _context} = StructuralRepair.process(input, %{repairs: [], options: []})
 
       # Should handle the brace inside the string correctly
       assert String.contains?(result, "val}ue")

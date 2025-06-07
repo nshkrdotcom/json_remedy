@@ -25,6 +25,18 @@ defmodule JsonRemedy.Layer2.StructuralRepair do
   @type delimiter_type :: :brace | :bracket
   @type context_frame :: %{type: delimiter_type(), position: non_neg_integer()}
 
+  # More specific state type for the state machine
+  @type state_map :: %{
+          position: non_neg_integer(),
+          current_state: parser_state(),
+          context_stack: [context_frame()],
+          repairs: [repair_action()],
+          in_string: boolean(),
+          escape_next: boolean(),
+          result_chars: [String.t()],
+          input: String.t()
+        }
+
   @doc """
   Process input string and apply Layer 2 structural repairs using state machine.
 
@@ -105,12 +117,12 @@ defmodule JsonRemedy.Layer2.StructuralRepair do
     end
   end
 
-  @spec handle_quote(state :: map(), char :: String.t()) :: map()
+  @spec handle_quote(state :: state_map(), char :: <<_::8>>) :: state_map()
   defp handle_quote(state, char) do
     %{state | in_string: not state.in_string, result_chars: [char | state.result_chars]}
   end
 
-  @spec handle_delimiter(state :: map(), char :: String.t()) :: map()
+  @spec handle_delimiter(state :: state_map(), char :: <<_::8>>) :: state_map()
   defp handle_delimiter(state, char) do
     case char do
       "{" ->
@@ -131,7 +143,7 @@ defmodule JsonRemedy.Layer2.StructuralRepair do
     end
   end
 
-  @spec handle_opening_brace(state :: map(), char :: String.t()) :: map()
+  @spec handle_opening_brace(state :: state_map(), char :: <<_::8>>) :: state_map()
   defp handle_opening_brace(state, char) do
     # Check for extra opening braces (like {{ without any content)
     if extra_opening_delimiter?(state, :brace) do
@@ -157,7 +169,7 @@ defmodule JsonRemedy.Layer2.StructuralRepair do
     end
   end
 
-  @spec handle_opening_bracket(state :: map(), char :: String.t()) :: map()
+  @spec handle_opening_bracket(state :: state_map(), char :: <<_::8>>) :: state_map()
   defp handle_opening_bracket(state, char) do
     # Check for extra opening brackets (like [[ without any content)
     if extra_opening_delimiter?(state, :bracket) do
@@ -183,7 +195,7 @@ defmodule JsonRemedy.Layer2.StructuralRepair do
     end
   end
 
-  @spec handle_closing_brace(state :: map(), char :: String.t()) :: map()
+  @spec handle_closing_brace(state :: state_map(), char :: <<_::8>>) :: state_map()
   defp handle_closing_brace(state, char) do
     case state.context_stack do
       # No open context - this is an extra closing brace
@@ -230,7 +242,7 @@ defmodule JsonRemedy.Layer2.StructuralRepair do
     end
   end
 
-  @spec handle_closing_bracket(state :: map(), char :: String.t()) :: map()
+  @spec handle_closing_bracket(state :: state_map(), char :: <<_::8>>) :: state_map()
   defp handle_closing_bracket(state, char) do
     case state.context_stack do
       # No open context - this is an extra closing bracket
@@ -281,7 +293,7 @@ defmodule JsonRemedy.Layer2.StructuralRepair do
   defp determine_state_from_stack([%{type: :brace} | _]), do: :object
   defp determine_state_from_stack([%{type: :bracket} | _]), do: :array
 
-  @spec extra_opening_delimiter?(state :: map(), delimiter_type :: delimiter_type()) ::
+  @spec extra_opening_delimiter?(state :: state_map(), delimiter_type :: delimiter_type()) ::
           boolean()
   defp extra_opening_delimiter?(state, delimiter_type) do
     case state.context_stack do
@@ -322,7 +334,7 @@ defmodule JsonRemedy.Layer2.StructuralRepair do
     end
   end
 
-  @spec close_unclosed_contexts(state :: map()) :: map()
+  @spec close_unclosed_contexts(state :: state_map()) :: state_map()
   defp close_unclosed_contexts(%{context_stack: []} = state), do: state
 
   defp close_unclosed_contexts(state) do
@@ -426,7 +438,7 @@ defmodule JsonRemedy.Layer2.StructuralRepair do
   Return the priority order for this layer.
   Layer 2 (Structural Repair) should run after Layer 1 (Content Cleaning).
   """
-  @spec priority() :: non_neg_integer()
+  @spec priority() :: 2
   def priority, do: 2
 
   @doc """
