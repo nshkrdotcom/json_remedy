@@ -11,24 +11,14 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
   Uses regex-based processing as it's the right tool for these content cleaning tasks.
   """
 
-  @type repair_action :: %{
-          layer: atom(),
-          action: String.t(),
-          position: non_neg_integer() | nil,
-          original: String.t() | nil,
-          replacement: String.t() | nil
-        }
+  @behaviour JsonRemedy.LayerBehaviour
 
-  @type repair_context :: %{
-          repairs: [repair_action()],
-          options: keyword(),
-          metadata: map()
-        }
+  alias JsonRemedy.LayerBehaviour
 
-  @type layer_result ::
-          {:ok, String.t(), repair_context()}
-          | {:continue, String.t(), repair_context()}
-          | {:error, String.t()}
+  # Import types from LayerBehaviour
+  @type repair_action :: LayerBehaviour.repair_action()
+  @type repair_context :: LayerBehaviour.repair_context()
+  @type layer_result :: LayerBehaviour.layer_result()
 
   @doc """
   Process input string and apply Layer 1 content cleaning repairs.
@@ -44,8 +34,8 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
       input
       |> remove_code_fences()
       |> remove_comments()
-      |> extract_json_content()
-      |> normalize_encoding()
+      |> extract_json_content_internal()
+      |> normalize_encoding_internal()
 
     updated_context = %{
       repairs: context.repairs ++ new_repairs,
@@ -118,9 +108,9 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
   @doc """
   Extract JSON from wrapper text (HTML, prose, etc.).
   """
-  @spec extract_json_content(input :: {String.t(), [repair_action()]}) ::
+  @spec extract_json_content_internal(input :: {String.t(), [repair_action()]}) ::
           {String.t(), [repair_action()]}
-  def extract_json_content({input, existing_repairs}) do
+  def extract_json_content_internal({input, existing_repairs}) do
     # Try to extract JSON from HTML tags first
     {result, html_repairs} = extract_from_html_tags(input)
 
@@ -134,9 +124,9 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
   @doc """
   Normalize text encoding to UTF-8.
   """
-  @spec normalize_encoding(input :: {String.t(), [repair_action()]}) ::
+  @spec normalize_encoding_internal(input :: {String.t(), [repair_action()]}) ::
           {String.t(), [repair_action()]}
-  def normalize_encoding({input, existing_repairs}) do
+  def normalize_encoding_internal({input, existing_repairs}) do
     if String.valid?(input) do
       {input, existing_repairs}
     else
@@ -154,6 +144,113 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
 
       {cleaned, existing_repairs ++ [repair]}
     end
+  end
+
+  # LayerBehaviour callback implementations
+
+  @doc """
+  Check if this layer can handle the given input.
+  Layer 1 can handle any text input that may contain JSON with wrapping content.
+  """
+  @spec supports?(input :: String.t()) :: boolean()
+  def supports?(input) when is_binary(input) do
+    # Layer 1 can attempt to process any string input
+    # It looks for code fences, comments, or wrapper content
+    # Use fast string pattern matching instead of expensive operations
+    String.contains?(input, "```") or
+      String.contains?(input, "//") or
+      String.contains?(input, "/*") or
+      String.contains?(input, "<pre>") or
+      String.contains?(input, "<code>") or
+      long_text_with_content?(input)
+  end
+
+  def supports?(_), do: false
+
+  @doc """
+  Return the priority order for this layer.
+  Layer 1 (Content Cleaning) should run first in the pipeline.
+  """
+  @spec priority() :: non_neg_integer()
+  def priority, do: 1
+
+  @doc """
+  Return a human-readable name for this layer.
+  """
+  @spec name() :: String.t()
+  def name, do: "Content Cleaning"
+
+  @doc """
+  Validate layer configuration and options.
+  Layer 1 accepts options for enabling/disabling specific cleaning features.
+  """
+  @spec validate_options(options :: keyword()) :: :ok | {:error, String.t()}
+  def validate_options(options) when is_list(options) do
+    valid_keys = [:remove_comments, :remove_code_fences, :extract_from_html, :normalize_encoding]
+
+    invalid_keys = Keyword.keys(options) -- valid_keys
+
+    if Enum.empty?(invalid_keys) do
+      # Validate option values
+      case validate_option_values(options) do
+        :ok -> :ok
+        error -> error
+      end
+    else
+      {:error, "Invalid options: #{inspect(invalid_keys)}. Valid options: #{inspect(valid_keys)}"}
+    end
+  end
+
+  def validate_options(_), do: {:error, "Options must be a keyword list"}
+
+  defp validate_option_values(options) do
+    boolean_options = [
+      :remove_comments,
+      :remove_code_fences,
+      :extract_from_html,
+      :normalize_encoding
+    ]
+
+    Enum.reduce_while(options, :ok, fn {key, value}, _acc ->
+      if key in boolean_options and not is_boolean(value) do
+        {:halt, {:error, "Option #{key} must be a boolean, got: #{inspect(value)}"}}
+      else
+        {:cont, :ok}
+      end
+    end)
+  end
+
+  # Public API functions that match the API contracts
+
+  @doc """
+  Strip comments while preserving comment-like content in strings.
+  Public API version that takes string input directly.
+  """
+  @spec strip_comments(input :: String.t()) :: {String.t(), [repair_action()]}
+  def strip_comments(input) when is_binary(input) do
+    remove_comments({input, []})
+  end
+
+  @doc """
+  Extract JSON from wrapper text (HTML, prose, etc.).
+  Public API version that takes string input directly.
+  """
+  @spec extract_json_content(input :: String.t()) :: {String.t(), [repair_action()]}
+  def extract_json_content(input) when is_binary(input) do
+    # Need to rename one of these functions to avoid conflicts
+    # For now, call the internal pipeline function directly
+    extract_json_content_internal({input, []})
+  end
+
+  @doc """
+  Normalize text encoding to UTF-8.
+  Public API version that takes string input directly.
+  """
+  @spec normalize_encoding(input :: String.t()) :: {String.t(), [repair_action()]}
+  def normalize_encoding(input) when is_binary(input) do
+    # Need to rename one of these functions to avoid conflicts
+    # For now, call the internal pipeline function directly
+    normalize_encoding_internal({input, []})
   end
 
   # Private helper functions
@@ -311,6 +408,12 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
   end
 
   # Helper functions for string detection
+
+  # Fast check for long text that likely contains JSON content
+  defp long_text_with_content?(input) do
+    byte_size(input) > 100 and
+      not (String.starts_with?(input, "{") or String.starts_with?(input, "["))
+  end
 
   defp inside_string?(input, target) when is_binary(target) do
     # Find the position of target in input

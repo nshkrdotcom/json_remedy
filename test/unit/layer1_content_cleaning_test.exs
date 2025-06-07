@@ -27,13 +27,15 @@ defmodule JsonRemedy.Layer1.ContentCleaningTest do
         "```javascript\n{\"a\": 1}\n```",
         # Malformed fences
         "``json\n{\"a\": 1}```",
-        "```json\n{\"a\": 1}``"
+        "```json\n{\"a\": 1}``",
+        # Multiple fences
+        "```json\n{\"a\": 1}\n```\n```json\n{\"b\": 2}\n```"
       ]
 
       for input <- test_cases do
         {:ok, result, context} = ContentCleaning.process(input, %{repairs: [], options: []})
         # Should contain valid JSON after processing
-        assert String.contains?(result, "{\"a\": 1}")
+        assert String.contains?(result, "{\"a\": 1}") or String.contains?(result, "{\"b\": 2}")
         assert length(context.repairs) > 0
       end
     end
@@ -230,6 +232,95 @@ defmodule JsonRemedy.Layer1.ContentCleaningTest do
 
       # Should have multiple repairs logged
       assert length(context.repairs) >= 2
+    end
+  end
+
+  describe "LayerBehaviour implementation" do
+    test "supports?/1 detects content that needs cleaning" do
+      # Should support inputs with code fences
+      assert ContentCleaning.supports?("```json\n{\"test\": true}\n```")
+      assert ContentCleaning.supports?("```\n{\"test\": true}\n```")
+
+      # Should support inputs with comments
+      assert ContentCleaning.supports?("// Comment\n{\"test\": true}")
+      assert ContentCleaning.supports?("{\"test\": true} /* comment */")
+
+      # Should support inputs with HTML wrappers
+      assert ContentCleaning.supports?("<pre>{\"test\": true}</pre>")
+      assert ContentCleaning.supports?("<code>{\"test\": true}</code>")
+
+      # Should support long text that doesn't start with JSON
+      long_text = String.duplicate("This is prose text. ", 10) <> "{\"test\": true}"
+      assert ContentCleaning.supports?(long_text)
+
+      # Should NOT support clean JSON
+      refute ContentCleaning.supports?("{\"clean\": \"json\"}")
+      refute ContentCleaning.supports?("[1, 2, 3]")
+
+      # Should NOT support non-string input
+      refute ContentCleaning.supports?(123)
+      refute ContentCleaning.supports?(nil)
+    end
+
+    test "priority/0 returns correct layer priority" do
+      assert ContentCleaning.priority() == 1
+    end
+
+    test "name/0 returns layer name" do
+      assert ContentCleaning.name() == "Content Cleaning"
+    end
+
+    test "validate_options/1 validates layer options" do
+      # Valid options
+      assert ContentCleaning.validate_options([]) == :ok
+      assert ContentCleaning.validate_options(remove_comments: true) == :ok
+      assert ContentCleaning.validate_options(remove_code_fences: false) == :ok
+
+      assert ContentCleaning.validate_options(extract_from_html: true, normalize_encoding: false) ==
+               :ok
+
+      # Invalid option keys
+      {:error, message} = ContentCleaning.validate_options(invalid_option: true)
+      assert message =~ "Invalid options: [:invalid_option]"
+
+      # Invalid option values
+      {:error, message} = ContentCleaning.validate_options(remove_comments: "not_boolean")
+      assert message =~ "must be a boolean"
+
+      # Invalid input type
+      {:error, message} = ContentCleaning.validate_options("not_a_list")
+      assert message =~ "must be a keyword list"
+    end
+  end
+
+  describe "public API functions" do
+    test "strip_comments/1 works with string input directly" do
+      input = "// Test comment\n{\"name\": \"Alice\"}"
+      {result, repairs} = ContentCleaning.strip_comments(input)
+
+      assert String.contains?(result, "Alice")
+      assert not String.contains?(result, "Test comment")
+      assert length(repairs) > 0
+      assert hd(repairs).action =~ "removed line comment"
+    end
+
+    test "extract_json_content/1 works with string input directly" do
+      input = "<pre>{\"name\": \"Alice\"}</pre>"
+      {result, repairs} = ContentCleaning.extract_json_content(input)
+
+      assert String.contains?(result, "Alice")
+      assert not String.contains?(result, "<pre>")
+      assert length(repairs) > 0
+      assert hd(repairs).action =~ "extracted JSON from HTML wrapper"
+    end
+
+    test "normalize_encoding/1 works with string input directly" do
+      input = "{\"name\": \"Alice\"}"
+      {result, repairs} = ContentCleaning.normalize_encoding(input)
+
+      # For valid UTF-8, should return unchanged
+      assert result == input
+      assert repairs == []
     end
   end
 end
