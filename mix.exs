@@ -64,7 +64,7 @@ defmodule JsonRemedy.MixProject do
       main: "JsonRemedy",
       source_ref: "v#{@version}",
       source_url: @source_url,
-      extras: ["README.md"]
+      extras: ["README.md", "LICENSE"]
     ]
   end
 end
