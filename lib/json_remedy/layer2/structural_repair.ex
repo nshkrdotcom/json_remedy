@@ -3,7 +3,7 @@ defmodule JsonRemedy.Layer2.StructuralRepair do
   Layer 2: Structural Repair - Fixes missing, extra, and mismatched delimiters using a state machine.
 
   This layer handles:
-  - Missing closing delimiters ({ [ 
+  - Missing closing delimiters ({ [
   - Extra closing delimiters } ]
   - Mismatched delimiters (closing with wrong type)
   - Complex nested structure issues
@@ -42,7 +42,7 @@ defmodule JsonRemedy.Layer2.StructuralRepair do
 
   Returns:
   - `{:ok, processed_input, updated_context}` - Layer completed successfully
-  - `{:continue, input, context}` - Layer doesn't apply, pass to next layer  
+  - `{:continue, input, context}` - Layer doesn't apply, pass to next layer
   - `{:error, reason}` - Layer failed, stop pipeline
   """
   @spec process(input :: String.t(), context :: repair_context()) :: layer_result()

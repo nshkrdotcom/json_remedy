@@ -25,19 +25,12 @@ defmodule JsonRemedy.LayerBehaviour do
           | {:continue, String.t(), repair_context()}
           | {:error, String.t()}
 
-  @type syntax_rule :: %{
-          name: String.t(),
-          pattern: Regex.t(),
-          replacement: String.t(),
-          condition: (String.t() -> boolean()) | nil
-        }
-
   @doc """
   Process input string and apply layer-specific repairs.
 
   Returns:
   - `{:ok, processed_input, updated_context}` - Layer completed successfully
-  - `{:continue, input, context}` - Layer doesn't apply, pass to next layer  
+  - `{:continue, input, context}` - Layer doesn't apply, pass to next layer
   - `{:error, reason}` - Layer failed, stop pipeline
   """
   @callback process(input :: String.t(), context :: repair_context()) :: layer_result()
@@ -76,43 +69,28 @@ defmodule JsonRemedy.LayerBehaviour do
   def inside_string?(input, position) do
     before = String.slice(input, 0, position)
 
-    # Count unescaped quotes before this position
-    quote_count =
-      before
-      # Remove escaped quotes
-      |> String.replace(~r/\\"/, "")
-      |> String.graphemes()
-      |> Enum.count(&(&1 == "\""))
+    # Count unescaped quotes before this position using string processing
+    quote_count = count_unescaped_quotes(before, 0, 0)
 
     # Odd number means we're inside a string
     rem(quote_count, 2) != 0
   end
 
-  @doc """
-  Apply a single syntax rule with context awareness.
-  """
-  @spec apply_rule(input :: String.t(), rule :: syntax_rule()) ::
-          {String.t(), [repair_action()]}
-  def apply_rule(input, rule) do
-    if rule.condition && !rule.condition.(input) do
-      {input, []}
-    else
-      # Apply the rule
-      result = Regex.replace(rule.pattern, input, rule.replacement)
+  # Helper function to count unescaped quotes without regex
+  defp count_unescaped_quotes("", _pos, count), do: count
 
-      if result != input do
-        repair = %{
-          layer: :generic,
-          action: "applied rule: #{rule.name}",
-          position: nil,
-          original: input,
-          replacement: result
-        }
+  defp count_unescaped_quotes(<<"\\\"", rest::binary>>, pos, count) do
+    # Skip escaped quote
+    count_unescaped_quotes(rest, pos + 2, count)
+  end
 
-        {result, [repair]}
-      else
-        {input, []}
-      end
-    end
+  defp count_unescaped_quotes(<<"\"", rest::binary>>, pos, count) do
+    # Found unescaped quote
+    count_unescaped_quotes(rest, pos + 1, count + 1)
+  end
+
+  defp count_unescaped_quotes(<<_char, rest::binary>>, pos, count) do
+    # Regular character
+    count_unescaped_quotes(rest, pos + 1, count)
   end
 end

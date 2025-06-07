@@ -1,0 +1,13 @@
+{
+    // Disable automatic compilation and debugging to prevent error loops
+    "elixirLS.dialyzerEnabled": false,
+    "elixirLS.autoInsertRequiredAlias": false,
+    "elixirLS.enableTestLenses": false,
+    "files.watcherExclude": {
+        "**/.git/objects/**": true,
+        "**/.git/subtree-cache/**": true,
+        "**/node_modules/*/**": true,
+        "**/_build/**": true,
+        "**/deps/**": true
+    }
+}

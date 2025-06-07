@@ -8,7 +8,7 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
   - Wrapper text extraction (HTML, prose)
   - Encoding normalization
 
-  Uses regex-based processing as it's the right tool for these content cleaning tasks.
+  Uses direct string methods instead of regex for better performance and clearer code.
   """
 
   @behaviour JsonRemedy.LayerBehaviour
@@ -25,7 +25,7 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
 
   Returns:
   - `{:ok, processed_input, updated_context}` - Layer completed successfully
-  - `{:continue, input, context}` - Layer doesn't apply, pass to next layer  
+  - `{:continue, input, context}` - Layer doesn't apply, pass to next layer
   - `{:error, reason}` - Layer failed, stop pipeline
   """
   @spec process(input :: String.t(), context :: repair_context()) :: layer_result()
@@ -54,42 +54,12 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
   """
   @spec remove_code_fences(input :: String.t()) :: {String.t(), [repair_action()]}
   def remove_code_fences(input) do
-    # Multiple patterns for different fence formats
-    fence_patterns = [
-      # Standard
-      ~r/```(?:json|javascript|js|JSON)?\s*\n(.*?)\n```/ms,
-      # No newlines
-      ~r/```(?:json|javascript|js|JSON)?\s*(.*?)```/ms,
-      # Malformed opening
-      ~r/``(?:json|javascript|js|JSON)?\s*(.*?)```/ms,
-      # Malformed closing
-      ~r/```(?:json|javascript|js|JSON)?\s*(.*?)``/ms
-    ]
-
-    # Try each pattern
-    fence_patterns
-    |> Enum.reduce_while({input, []}, fn pattern, {current_input, repairs} ->
-      case Regex.run(pattern, current_input) do
-        [full_match, content] ->
-          # Check if this is inside a string (basic check)
-          if inside_string?(current_input, full_match) do
-            {:cont, {current_input, repairs}}
-          else
-            repair = %{
-              layer: :content_cleaning,
-              action: "removed code fences",
-              position: nil,
-              original: full_match,
-              replacement: String.trim(content)
-            }
-
-            {:halt, {String.trim(content), repairs ++ [repair]}}
-          end
-
-        nil ->
-          {:cont, {current_input, repairs}}
-      end
-    end)
+    # Check for code fences using string methods
+    if has_code_fences?(input) and not fence_in_string?(input) do
+      extract_from_code_fence(input)
+    else
+      {input, []}
+    end
   end
 
   @doc """
@@ -130,9 +100,8 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
     if String.valid?(input) do
       {input, existing_repairs}
     else
-      # For now, just ensure it's valid UTF-8
-      # In a real implementation, we'd handle various encoding issues
-      cleaned = String.replace(input, ~r/[^\x00-\x7F]/, "", global: true)
+      # Remove non-ASCII characters using direct character filtering
+      cleaned = filter_to_ascii(input)
 
       repair = %{
         layer: :content_cleaning,
@@ -253,10 +222,180 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
     normalize_encoding_internal({input, []})
   end
 
-  # Private helper functions
+  # Private helper functions - all using direct string methods instead of regex
 
+  # Code Fence Handling
+  defp has_code_fences?(input) do
+    String.contains?(input, "```")
+  end
+
+  defp fence_in_string?(input) do
+    # Check if ``` appears inside a string literal
+    parts = String.split(input, "```", parts: 2)
+
+    if length(parts) == 2 do
+      [before_fence, _after] = parts
+      quote_count = count_unescaped_quotes(before_fence)
+      rem(quote_count, 2) != 0
+    else
+      false
+    end
+  end
+
+  defp extract_from_code_fence(input) do
+    lines = String.split(input, "\n")
+
+    case find_code_fence_boundaries(lines) do
+      {start_idx, end_idx} ->
+        # Extract content between fences
+        content_lines = Enum.slice(lines, (start_idx + 1)..(end_idx - 1))
+        content = Enum.join(content_lines, "\n")
+
+        repair = %{
+          layer: :content_cleaning,
+          action: "removed code fences",
+          position: nil,
+          original: input,
+          replacement: String.trim(content)
+        }
+
+        {String.trim(content), [repair]}
+
+      nil ->
+        # Malformed fences - try to extract anyway
+        extract_malformed_fence_content(input)
+    end
+  end
+
+  defp find_code_fence_boundaries(lines) do
+    start_idx =
+      Enum.find_index(lines, fn line ->
+        trimmed = String.trim(line)
+        starts_with_fence?(trimmed)
+      end)
+
+    if start_idx do
+      # Look for closing fence after the start
+      end_idx =
+        Enum.find_index(Enum.drop(lines, start_idx + 1), fn line ->
+          trimmed = String.trim(line)
+          String.starts_with?(trimmed, "```") or String.starts_with?(trimmed, "``")
+        end)
+
+      if end_idx do
+        # Adjust index since we dropped elements
+        actual_end_idx = start_idx + 1 + end_idx
+        {start_idx, actual_end_idx}
+      else
+        nil
+      end
+    else
+      nil
+    end
+  end
+
+  defp starts_with_fence?(line) do
+    String.starts_with?(line, "```") or String.starts_with?(line, "``")
+  end
+
+  defp fence_has_language?(line) do
+    trimmed = String.trim_leading(line, "`")
+    trimmed != "" and not String.starts_with?(trimmed, "\n")
+  end
+
+  defp extract_malformed_fence_content(input) do
+    # Handle cases like ```json\n{content} or {content}\n```
+    cond do
+      # Check for malformed fences like ``json first (before checking ```)
+      String.starts_with?(input, "``") and not String.starts_with?(input, "```") ->
+        # Handle malformed fences like ``json\n{content}```
+        parts = String.split(input, "``")
+
+        if length(parts) >= 2 do
+          # Find the part with JSON content
+          content_part =
+            Enum.find(parts, fn part ->
+              trimmed = String.trim(part)
+              String.contains?(trimmed, "{") or String.contains?(trimmed, "[")
+            end)
+
+          if content_part do
+            content = String.trim(content_part)
+            # Remove trailing ``` if present
+            content = String.replace_suffix(content, "```", "")
+            content = remove_language_prefix(content)
+
+            repair = %{
+              layer: :content_cleaning,
+              action: "removed code fences",
+              position: nil,
+              original: input,
+              replacement: content
+            }
+
+            {content, [repair]}
+          else
+            {input, []}
+          end
+        else
+          {input, []}
+        end
+
+      String.contains?(input, "```") ->
+        parts = String.split(input, "```")
+
+        if length(parts) >= 2 do
+          # Take the middle part that likely contains JSON
+          content = Enum.at(parts, 1) || Enum.at(parts, 0)
+          content = String.trim(content)
+
+          # Remove language identifiers
+          content = remove_language_prefix(content)
+
+          repair = %{
+            layer: :content_cleaning,
+            action: "removed code fences",
+            position: nil,
+            original: input,
+            replacement: content
+          }
+
+          {content, [repair]}
+        else
+          {input, []}
+        end
+
+      true ->
+        {input, []}
+    end
+  end
+
+  defp remove_language_prefix(content) do
+    lines = String.split(content, "\n")
+
+    case lines do
+      [first_line | rest] ->
+        if is_language_line?(first_line) do
+          Enum.join(rest, "\n")
+        else
+          content
+        end
+
+      _ ->
+        content
+    end
+  end
+
+  defp is_language_line?(line) do
+    trimmed = String.trim(line)
+    language_keywords = ["json", "javascript", "js", "JSON"]
+
+    Enum.any?(language_keywords, fn keyword -> String.contains?(trimmed, keyword) end) and
+      not String.contains?(trimmed, "{") and not String.contains?(trimmed, "[")
+  end
+
+  # Comment Removal using direct string methods
   defp remove_line_comments(input) do
-    # Remove // comments but preserve them inside strings
     lines = String.split(input, "\n")
 
     {processed_lines, repairs} =
@@ -264,7 +403,7 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
       |> Enum.with_index()
       |> Enum.map_reduce([], fn {line, _index}, acc_repairs ->
         if String.contains?(line, "//") and not line_has_comment_in_string?(line) do
-          cleaned_line = String.replace(line, ~r/\s*\/\/.*$/, "")
+          cleaned_line = remove_line_comment_from_line(line)
 
           repair = %{
             layer: :content_cleaning,
@@ -284,130 +423,271 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
     {result, Enum.reverse(repairs)}
   end
 
-  defp remove_block_comments(input) do
-    # Remove /* */ comments but preserve them inside strings
-    # Use a greedy pattern to handle nested comments properly
-    comment_pattern = ~r/\/\*.*\*\//ms
-
-    # Find all matches and their positions
-    matches = Regex.scan(comment_pattern, input, return: :index)
-
-    # Filter out matches that are inside strings and collect repairs
-    {filtered_matches, repairs} =
-      matches
-      |> Enum.map(fn [{start, length}] ->
-        original = String.slice(input, start, length)
-        inside_string = comment_inside_string?(input, start)
-
-        repair =
-          if not inside_string do
-            %{
-              layer: :content_cleaning,
-              action: "removed block comment",
-              position: start,
-              original: original,
-              replacement: ""
-            }
-          end
-
-        {{start, length, inside_string}, repair}
-      end)
-      |> Enum.reduce({[], []}, fn {{start, length, inside_string}, repair},
-                                  {matches_acc, repairs_acc} ->
-        if inside_string do
-          {matches_acc, repairs_acc}
-        else
-          {[{start, length} | matches_acc], [repair | repairs_acc]}
-        end
-      end)
-
-    # Remove comments by replacing them with empty string (process in reverse order to maintain positions)
-    result =
-      filtered_matches
-      |> Enum.sort_by(fn {start, _length} -> start end, :desc)
-      |> Enum.reduce(input, fn {start, length}, acc ->
-        before = String.slice(acc, 0, start)
-        after_part = String.slice(acc, start + length, String.length(acc))
-        before <> after_part
-      end)
-
-    {result, Enum.reverse(repairs)}
+  defp remove_line_comment_from_line(line) do
+    # Find // that's not inside a string
+    case find_line_comment_position(line) do
+      nil -> line
+      pos -> String.slice(line, 0, pos) |> String.trim_trailing()
+    end
   end
 
-  defp extract_from_html_tags(input) do
-    # Pattern to match HTML tags containing JSON
-    html_patterns = [
-      ~r/<pre[^>]*>(.*?)<\/pre>/ms,
-      ~r/<code[^>]*>(.*?)<\/code>/ms,
-      ~r/<json[^>]*>(.*?)<\/json>/ms
-    ]
+  defp find_line_comment_position(line) do
+    find_line_comment_position(line, 0, false)
+  end
 
-    {result, repairs} =
-      html_patterns
-      |> Enum.reduce({input, []}, fn pattern, {current_input, acc_repairs} ->
-        case Regex.run(pattern, current_input) do
-          [_full_match, content] ->
+  defp find_line_comment_position(<<>>, _pos, _in_string), do: nil
+
+  defp find_line_comment_position(<<"//", _rest::binary>>, pos, false), do: pos
+
+  defp find_line_comment_position(<<"\"", rest::binary>>, pos, in_string) do
+    find_line_comment_position(rest, pos + 1, not in_string)
+  end
+
+  defp find_line_comment_position(<<"\\\"", rest::binary>>, pos, in_string) do
+    # Skip escaped quote
+    find_line_comment_position(rest, pos + 2, in_string)
+  end
+
+  defp find_line_comment_position(<<_char::utf8, rest::binary>>, pos, in_string) do
+    find_line_comment_position(rest, pos + 1, in_string)
+  end
+
+  defp remove_block_comments(input) do
+    case find_block_comment(input) do
+      nil ->
+        {input, []}
+
+      {start_pos, end_pos, comment_text} ->
+        if not comment_inside_string?(input, start_pos) do
+          before = String.slice(input, 0, start_pos)
+          after_comment = String.slice(input, end_pos + 2, String.length(input))
+          result = before <> after_comment
+
+          repair = %{
+            layer: :content_cleaning,
+            action: "removed block comment",
+            position: start_pos,
+            original: comment_text,
+            replacement: ""
+          }
+
+          # Recursively remove more block comments
+          {final_result, more_repairs} = remove_block_comments(result)
+          {final_result, [repair | more_repairs]}
+        else
+          {input, []}
+        end
+    end
+  end
+
+  defp find_block_comment(input) do
+    find_block_comment(input, 0)
+  end
+
+  defp find_block_comment(input, start_offset) do
+    case find_substring_position(input, "/*", start_offset) do
+      nil ->
+        nil
+
+      start_pos ->
+        # For nested comments, find the matching */ by counting nesting levels
+        case find_matching_block_comment_end(input, start_pos + 2) do
+          nil ->
+            nil
+
+          end_pos ->
+            comment_length = end_pos - start_pos + 2
+            comment_text = String.slice(input, start_pos, comment_length)
+            {start_pos, end_pos, comment_text}
+        end
+    end
+  end
+
+  defp find_matching_block_comment_end(input, start_pos) do
+    find_matching_block_comment_end(input, start_pos, 1)
+  end
+
+  defp find_matching_block_comment_end(input, pos, nesting_level) when nesting_level > 0 do
+    case {find_substring_position(input, "/*", pos), find_substring_position(input, "*/", pos)} do
+      {nil, nil} ->
+        nil
+
+      {nil, close_pos} ->
+        if nesting_level == 1,
+          do: close_pos,
+          else: find_matching_block_comment_end(input, close_pos + 2, nesting_level - 1)
+
+      {open_pos, nil} ->
+        nil
+
+      {open_pos, close_pos} when open_pos < close_pos ->
+        find_matching_block_comment_end(input, open_pos + 2, nesting_level + 1)
+
+      {_open_pos, close_pos} ->
+        if nesting_level == 1,
+          do: close_pos,
+          else: find_matching_block_comment_end(input, close_pos + 2, nesting_level - 1)
+    end
+  end
+
+  defp find_matching_block_comment_end(_input, _pos, 0), do: nil
+
+  defp find_substring_position(string, substring, start_offset) do
+    # Search from the start_offset position
+    search_string = String.slice(string, start_offset, String.length(string))
+
+    case String.split(search_string, substring, parts: 2) do
+      [before, _after] ->
+        start_offset + byte_size(before)
+
+      [_single_part] ->
+        nil
+
+      _ ->
+        nil
+    end
+  end
+
+  # HTML Tag Extraction using direct string methods
+  defp extract_from_html_tags(input) do
+    cond do
+      String.contains?(input, "<pre>") and String.contains?(input, "</pre>") ->
+        extract_from_tag(input, "<pre>", "</pre>", "extracted JSON from HTML wrapper")
+
+      String.contains?(input, "<code>") and String.contains?(input, "</code>") ->
+        extract_from_tag(input, "<code>", "</code>", "extracted JSON from HTML wrapper")
+
+      String.contains?(input, "<json>") and String.contains?(input, "</json>") ->
+        extract_from_tag(input, "<json>", "</json>", "extracted JSON from HTML wrapper")
+
+      true ->
+        {input, []}
+    end
+  end
+
+  defp extract_from_tag(input, open_tag, close_tag, action_description) do
+    case String.split(input, open_tag, parts: 2) do
+      [_before, rest] ->
+        case String.split(rest, close_tag, parts: 2) do
+          [content, _after] ->
+            cleaned_content = String.trim(content)
+
             repair = %{
               layer: :content_cleaning,
-              action: "extracted JSON from HTML wrapper",
+              action: action_description,
               position: nil,
               original: nil,
               replacement: nil
             }
 
-            {String.trim(content), [repair | acc_repairs]}
+            {cleaned_content, [repair]}
 
-          nil ->
-            {current_input, acc_repairs}
+          [_single_part] ->
+            {input, []}
         end
-      end)
 
-    {result, Enum.reverse(repairs)}
+      [_single_part] ->
+        {input, []}
+    end
   end
 
+  # Prose Extraction using direct string methods
   defp extract_from_prose(input) do
     # Simple heuristic: if input contains clear JSON structure
     # but also has a lot of prose, try to extract the JSON part
-
-    # Look for JSON-like patterns: starts with { or [, contains quotes and colons/commas
-    json_pattern = ~r/(\{.*?\}|\[.*?\])/ms
-
-    if String.length(input) > 100 and
-         not String.starts_with?(String.trim(input), ["{", "["]) and
-         Regex.match?(json_pattern, input) do
-      case Regex.run(json_pattern, input) do
-        [_full_match, json_content] ->
-          repair = %{
-            layer: :content_cleaning,
-            action: "extracted JSON from wrapper text",
-            position: nil,
-            original: input,
-            replacement: json_content
-          }
-
-          {String.trim(json_content), [repair]}
-
-        [json_content] ->
-          # Single capture group case
-          repair = %{
-            layer: :content_cleaning,
-            action: "extracted JSON from wrapper text",
-            position: nil,
-            original: input,
-            replacement: json_content
-          }
-
-          {String.trim(json_content), [repair]}
-
+    if should_extract_from_prose?(input) do
+      case extract_json_like_content(input) do
         nil ->
           {input, []}
+
+        json_content ->
+          repair = %{
+            layer: :content_cleaning,
+            action: "extracted JSON from wrapper text",
+            position: nil,
+            original: input,
+            replacement: json_content
+          }
+
+          {String.trim(json_content), [repair]}
       end
     else
       {input, []}
     end
   end
 
-  # Helper functions for string detection
+  defp should_extract_from_prose?(input) do
+    String.length(input) > 100 and
+      not String.starts_with?(String.trim(input), "{") and
+      not String.starts_with?(String.trim(input), "[") and
+      (String.contains?(input, "{") or String.contains?(input, "["))
+  end
+
+  defp extract_json_like_content(input) do
+    # Look for content that starts with { or [
+    cond do
+      json_pos = find_json_start(input, "{") ->
+        extract_balanced_content(input, json_pos, "{", "}")
+
+      json_pos = find_json_start(input, "[") ->
+        extract_balanced_content(input, json_pos, "[", "]")
+
+      true ->
+        nil
+    end
+  end
+
+  defp find_json_start(input, start_char) do
+    case String.split(input, start_char, parts: 2) do
+      [before, _after] -> String.length(before)
+      [_single] -> nil
+    end
+  end
+
+  defp extract_balanced_content(input, start_pos, open_char, close_char) do
+    substring = String.slice(input, start_pos, String.length(input))
+
+    case find_balanced_end(substring, open_char, close_char) do
+      nil -> nil
+      end_pos -> String.slice(substring, 0, end_pos + 1)
+    end
+  end
+
+  defp find_balanced_end(string, open_char, close_char) do
+    find_balanced_end(string, open_char, close_char, 0, 0, false)
+  end
+
+  defp find_balanced_end(<<>>, _open, _close, _pos, _balance, _in_string), do: nil
+
+  defp find_balanced_end(<<"\"", rest::binary>>, open, close, pos, balance, in_string) do
+    find_balanced_end(rest, open, close, pos + 1, balance, not in_string)
+  end
+
+  defp find_balanced_end(<<"\\\"", rest::binary>>, open, close, pos, balance, in_string) do
+    find_balanced_end(rest, open, close, pos + 2, balance, in_string)
+  end
+
+  defp find_balanced_end(<<char::utf8, rest::binary>>, open, close, pos, balance, false)
+       when <<char::utf8>> == open do
+    find_balanced_end(rest, open, close, pos + 1, balance + 1, false)
+  end
+
+  defp find_balanced_end(<<char::utf8, rest::binary>>, open, close, pos, balance, false)
+       when <<char::utf8>> == close do
+    new_balance = balance - 1
+
+    if new_balance == 0 do
+      pos
+    else
+      find_balanced_end(rest, open, close, pos + 1, new_balance, false)
+    end
+  end
+
+  defp find_balanced_end(<<_char::utf8, rest::binary>>, open, close, pos, balance, in_string) do
+    find_balanced_end(rest, open, close, pos + 1, balance, in_string)
+  end
+
+  # Helper functions for string detection using direct methods
 
   # Fast check for long text that likely contains JSON content
   defp long_text_with_content?(input) do
@@ -415,32 +695,16 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
       not (String.starts_with?(input, "{") or String.starts_with?(input, "["))
   end
 
-  defp inside_string?(input, target) when is_binary(target) do
-    # Find the position of target in input
-    case String.split(input, target, parts: 2) do
-      [before, _after] ->
-        string_context_at_position?(input, String.length(before))
-
-      [_] ->
-        false
-    end
-  end
-
   defp line_has_comment_in_string?(line) do
     # Simple check: count quotes before //
-    comment_pos = String.split(line, "//", parts: 2) |> hd() |> String.length()
-    before_comment = String.slice(line, 0, comment_pos)
+    case String.split(line, "//", parts: 2) do
+      [before_comment, _after] ->
+        quote_count = count_unescaped_quotes(before_comment)
+        rem(quote_count, 2) != 0
 
-    # Count unescaped quotes
-    quote_count =
-      before_comment
-      # Remove escaped quotes
-      |> String.replace(~r/\\"/, "")
-      |> String.graphemes()
-      |> Enum.count(&(&1 == "\""))
-
-    # Odd number means we're inside a string
-    rem(quote_count, 2) != 0
+      [_single_part] ->
+        false
+    end
   end
 
   defp comment_inside_string?(input, position) do
@@ -449,16 +713,33 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
 
   defp string_context_at_position?(input, position) do
     before = String.slice(input, 0, position)
-
-    # Count unescaped quotes before this position
-    quote_count =
-      before
-      # Remove escaped quotes
-      |> String.replace(~r/\\"/, "")
-      |> String.graphemes()
-      |> Enum.count(&(&1 == "\""))
-
-    # Odd number means we're inside a string
+    quote_count = count_unescaped_quotes(before)
     rem(quote_count, 2) != 0
+  end
+
+  defp count_unescaped_quotes(string) do
+    count_unescaped_quotes(string, 0, 0)
+  end
+
+  defp count_unescaped_quotes(<<>>, _pos, count), do: count
+
+  defp count_unescaped_quotes(<<"\\\"", rest::binary>>, pos, count) do
+    count_unescaped_quotes(rest, pos + 2, count)
+  end
+
+  defp count_unescaped_quotes(<<"\"", rest::binary>>, pos, count) do
+    count_unescaped_quotes(rest, pos + 1, count + 1)
+  end
+
+  defp count_unescaped_quotes(<<_char::utf8, rest::binary>>, pos, count) do
+    count_unescaped_quotes(rest, pos + 1, count)
+  end
+
+  # Encoding normalization using direct methods
+  defp filter_to_ascii(input) do
+    input
+    |> String.to_charlist()
+    |> Enum.filter(fn char -> char >= 0 and char <= 127 end)
+    |> List.to_string()
   end
 end
