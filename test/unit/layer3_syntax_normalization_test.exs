@@ -323,6 +323,233 @@ defmodule JsonRemedy.Layer3.SyntaxNormalizationTest do
       assert length(repairs) > 0
       assert hd(repairs).action =~ "removed trailing comma"
     end
+
+    test "default_rules/0 returns expected rule set" do
+      rules = SyntaxNormalization.default_rules()
+
+      assert is_list(rules)
+      assert length(rules) > 0
+
+      # Check that all rules are well-formed
+      for rule <- rules do
+        assert Map.has_key?(rule, :name)
+        assert Map.has_key?(rule, :processor)
+        assert Map.has_key?(rule, :condition)
+        assert is_binary(rule.name)
+        assert is_function(rule.processor, 1)
+      end
+
+      # Check specific rules exist
+      rule_names = Enum.map(rules, & &1.name)
+      assert "quote_unquoted_keys" in rule_names
+      assert "normalize_single_quotes" in rule_names
+      assert "normalize_booleans_and_nulls" in rule_names
+      assert "fix_trailing_commas" in rule_names
+    end
+
+    test "inside_string?/2 correctly detects string contexts" do
+      input = ~s({"key": "value with 'quotes'", name: "Alice"})
+
+      # Position 0: outside string (at '{')
+      refute SyntaxNormalization.inside_string?(input, 0)
+
+      # Position 10: inside first string (in "value...")
+      assert SyntaxNormalization.inside_string?(input, 10)
+
+      # Position 30: outside string (at space before 'name')
+      refute SyntaxNormalization.inside_string?(input, 30)
+
+      # Position 40: inside second string (in "Alice")
+      assert SyntaxNormalization.inside_string?(input, 40)
+
+      # Test with single quotes
+      input2 = "{'name': 'Alice'}"
+      # inside 'Alice'
+      assert SyntaxNormalization.inside_string?(input2, 10)
+      # at ':'
+      refute SyntaxNormalization.inside_string?(input2, 8)
+    end
+
+    test "apply_rule/2 applies individual rules correctly" do
+      rule = %{
+        name: "test_rule",
+        processor: fn input ->
+          if String.contains?(input, "True") do
+            {String.replace(input, "True", "true"),
+             [
+               %{
+                 layer: :syntax_normalization,
+                 action: "test_rule",
+                 position: 0,
+                 original: nil,
+                 replacement: nil
+               }
+             ]}
+          else
+            {input, []}
+          end
+        end,
+        condition: nil
+      }
+
+      # Rule should match and apply
+      {result, repairs} = SyntaxNormalization.apply_rule("{\"active\": True}", rule)
+      assert result == "{\"active\": true}"
+      assert length(repairs) == 1
+      assert hd(repairs).action == "test_rule"
+
+      # Rule should not match
+      {result, repairs} = SyntaxNormalization.apply_rule("{\"active\": true}", rule)
+      assert result == "{\"active\": true}"
+      assert repairs == []
+    end
+
+    test "apply_rule/2 respects rule conditions" do
+      # Create a rule with a condition that always returns false
+      rule = %{
+        name: "conditional_rule",
+        processor: fn input ->
+          {String.replace(input, "True", "true"),
+           [
+             %{
+               layer: :syntax_normalization,
+               action: "conditional_rule",
+               position: 0,
+               original: nil,
+               replacement: nil
+             }
+           ]}
+        end,
+        condition: fn _input -> false end
+      }
+
+      {result, repairs} = SyntaxNormalization.apply_rule("{\"active\": True}", rule)
+      # Unchanged due to condition
+      assert result == "{\"active\": True}"
+      assert repairs == []
+    end
+
+    test "quote_unquoted_keys/1 quotes keys correctly" do
+      test_cases = [
+        {"{name: \"Alice\"}", "{\"name\": \"Alice\"}"},
+        {"{user_id: 123}", "{\"user_id\": 123}"},
+        {"{userName: \"Bob\"}", "{\"userName\": \"Bob\"}"},
+        # Already quoted keys should be unchanged
+        {"{\"name\": \"Alice\"}", "{\"name\": \"Alice\"}"}
+      ]
+
+      for {input, expected} <- test_cases do
+        {result, repairs} = SyntaxNormalization.quote_unquoted_keys(input)
+
+        if input != expected do
+          assert result == expected
+          assert length(repairs) > 0
+        else
+          assert result == input
+          assert repairs == []
+        end
+      end
+    end
+
+    test "normalize_literals/1 handles all boolean and null variants" do
+      test_cases = [
+        {"{\"active\": True}", "{\"active\": true}"},
+        {"{\"active\": False}", "{\"active\": false}"},
+        {"{\"value\": None}", "{\"value\": null}"},
+        {"{\"value\": NULL}", "{\"value\": null}"},
+        {"{\"value\": Null}", "{\"value\": null}"},
+        # Multiple literals in one input
+        {"{\"a\": True, \"b\": None}", "{\"a\": true, \"b\": null}"}
+      ]
+
+      for {input, expected} <- test_cases do
+        {result, repairs} = SyntaxNormalization.normalize_literals(input)
+        assert result == expected
+        assert length(repairs) > 0
+      end
+
+      # Test with no literals to normalize
+      {result, repairs} = SyntaxNormalization.normalize_literals("{\"active\": true}")
+      assert result == "{\"active\": true}"
+      assert repairs == []
+    end
+
+    test "fix_colons/1 adds missing colons" do
+      test_cases = [
+        {"{\"name\" \"Alice\"}", "{\"name\": \"Alice\"}"},
+        {"{\"name\" \"Alice\", \"age\" 30}", "{\"name\": \"Alice\", \"age\": 30}"}
+      ]
+
+      for {input, expected} <- test_cases do
+        {result, repairs} = SyntaxNormalization.fix_colons(input)
+        assert result == expected
+        assert length(repairs) > 0
+        assert Enum.any?(repairs, &String.contains?(&1.action, "added missing colon"))
+      end
+    end
+
+    test "validate_rule/1 validates rule structure" do
+      # Valid rule
+      valid_rule = %{
+        name: "test_rule",
+        processor: fn input -> {input, []} end,
+        condition: nil
+      }
+
+      assert SyntaxNormalization.validate_rule(valid_rule) == :ok
+
+      # Valid rule with condition function
+      valid_rule_with_condition = %{
+        name: "test_rule",
+        processor: fn input -> {input, []} end,
+        condition: fn _input -> true end
+      }
+
+      assert SyntaxNormalization.validate_rule(valid_rule_with_condition) == :ok
+
+      # Invalid name
+      invalid_name = %{valid_rule | name: 123}
+      {:error, msg} = SyntaxNormalization.validate_rule(invalid_name)
+      assert msg =~ "name must be a string"
+
+      # Invalid processor
+      invalid_processor = %{valid_rule | processor: "not_a_function"}
+      {:error, msg} = SyntaxNormalization.validate_rule(invalid_processor)
+      assert msg =~ "processor must be a function/1"
+
+      # Invalid condition
+      invalid_condition = %{valid_rule | condition: "not_a_function"}
+      {:error, msg} = SyntaxNormalization.validate_rule(invalid_condition)
+      assert msg =~ "condition must be a function/1 or nil"
+    end
+
+    test "get_position_info/2 provides accurate position information" do
+      input = "line 1\nline 2\nline 3"
+
+      # Position at start of line 1
+      info = SyntaxNormalization.get_position_info(input, 0)
+      assert info.line == 1
+      assert info.column == 1
+
+      # Position at start of line 2 (after first newline)
+      info = SyntaxNormalization.get_position_info(input, 7)
+      assert info.line == 2
+      assert info.column == 1
+
+      # Position in middle of line 2
+      info = SyntaxNormalization.get_position_info(input, 10)
+      assert info.line == 2
+      assert info.column == 4
+
+      # Position at start of line 3
+      info = SyntaxNormalization.get_position_info(input, 14)
+      assert info.line == 3
+      assert info.column == 1
+
+      # Check context is provided
+      assert is_binary(info.context)
+      assert String.length(info.context) > 0
+    end
   end
 
   describe "complex scenarios" do

@@ -20,6 +20,13 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
   @type repair_context :: LayerBehaviour.repair_context()
   @type layer_result :: LayerBehaviour.layer_result()
 
+  # Layer-specific types as per API contract
+  @type syntax_rule :: %{
+          name: String.t(),
+          processor: (String.t() -> {String.t(), [repair_action()]}),
+          condition: (String.t() -> boolean()) | nil
+        }
+
   @type parse_state :: %{
           result: String.t(),
           position: non_neg_integer(),
@@ -204,6 +211,596 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
   @spec fix_commas(input :: String.t()) :: {String.t(), [repair_action()]}
   def fix_commas(input) do
     post_process_commas(input)
+  end
+
+  @doc """
+  Get default syntax normalization rules.
+  """
+  @spec default_rules() :: [syntax_rule()]
+  def default_rules do
+    [
+      %{
+        name: "quote_unquoted_keys",
+        processor: &quote_unquoted_keys_processor/1,
+        condition: nil
+      },
+      %{
+        name: "normalize_single_quotes",
+        processor: &normalize_quotes_processor/1,
+        condition: nil
+      },
+      %{
+        name: "normalize_booleans_and_nulls",
+        processor: &normalize_literals_processor/1,
+        condition: nil
+      },
+      %{
+        name: "fix_trailing_commas",
+        processor: &fix_trailing_commas_processor/1,
+        condition: nil
+      }
+    ]
+  end
+
+  # Processor functions for rules (non-regex implementations)
+  defp quote_unquoted_keys_processor(input) do
+    quote_unquoted_keys_direct(input)
+  end
+
+  defp normalize_quotes_processor(input) do
+    normalize_quotes(input)
+  end
+
+  defp normalize_literals_processor(input) do
+    normalize_literals_direct(input)
+  end
+
+  # Direct implementation of normalize_literals without regex
+  defp normalize_literals_direct(input) do
+    input
+    |> replace_literal_tokens("True", "true", "normalized boolean True -> true")
+    |> then(fn {content, repairs1} ->
+      {content2, repairs2} =
+        replace_literal_tokens(content, "False", "false", "normalized boolean False -> false")
+
+      {content2, repairs1 ++ repairs2}
+    end)
+    |> then(fn {content, repairs1} ->
+      {content2, repairs2} =
+        replace_literal_tokens(content, "TRUE", "true", "normalized boolean TRUE -> true")
+
+      {content2, repairs1 ++ repairs2}
+    end)
+    |> then(fn {content, repairs1} ->
+      {content2, repairs2} =
+        replace_literal_tokens(content, "FALSE", "false", "normalized boolean FALSE -> false")
+
+      {content2, repairs1 ++ repairs2}
+    end)
+    |> then(fn {content, repairs1} ->
+      {content2, repairs2} =
+        replace_literal_tokens(content, "None", "null", "normalized None -> null")
+
+      {content2, repairs1 ++ repairs2}
+    end)
+    |> then(fn {content, repairs1} ->
+      {content2, repairs2} =
+        replace_literal_tokens(content, "NULL", "null", "normalized NULL -> null")
+
+      {content2, repairs1 ++ repairs2}
+    end)
+    |> then(fn {content, repairs1} ->
+      {content2, repairs2} =
+        replace_literal_tokens(content, "Null", "null", "normalized Null -> null")
+
+      {content2, repairs1 ++ repairs2}
+    end)
+  end
+
+  # Replace literal tokens while preserving string content
+  defp replace_literal_tokens(input, search_token, replacement_token, repair_description) do
+    replace_literal_char_by_char(
+      input,
+      "",
+      0,
+      false,
+      false,
+      nil,
+      [],
+      search_token,
+      replacement_token,
+      repair_description
+    )
+  end
+
+  defp replace_literal_char_by_char(
+         input,
+         result,
+         pos,
+         _in_string,
+         _escape_next,
+         _quote_char,
+         repairs,
+         _search_token,
+         _replacement_token,
+         _repair_description
+       )
+       when pos >= byte_size(input) do
+    {result, repairs}
+  end
+
+  defp replace_literal_char_by_char(
+         input,
+         result,
+         pos,
+         in_string,
+         escape_next,
+         quote_char,
+         repairs,
+         search_token,
+         replacement_token,
+         repair_description
+       ) do
+    char = String.at(input, pos)
+
+    cond do
+      escape_next ->
+        replace_literal_char_by_char(
+          input,
+          result <> char,
+          pos + 1,
+          in_string,
+          false,
+          quote_char,
+          repairs,
+          search_token,
+          replacement_token,
+          repair_description
+        )
+
+      in_string && char == "\\" ->
+        replace_literal_char_by_char(
+          input,
+          result <> char,
+          pos + 1,
+          in_string,
+          true,
+          quote_char,
+          repairs,
+          search_token,
+          replacement_token,
+          repair_description
+        )
+
+      in_string && char == quote_char ->
+        replace_literal_char_by_char(
+          input,
+          result <> char,
+          pos + 1,
+          false,
+          false,
+          nil,
+          repairs,
+          search_token,
+          replacement_token,
+          repair_description
+        )
+
+      in_string ->
+        replace_literal_char_by_char(
+          input,
+          result <> char,
+          pos + 1,
+          in_string,
+          false,
+          quote_char,
+          repairs,
+          search_token,
+          replacement_token,
+          repair_description
+        )
+
+      char == "\"" || char == "'" ->
+        replace_literal_char_by_char(
+          input,
+          result <> char,
+          pos + 1,
+          true,
+          false,
+          char,
+          repairs,
+          search_token,
+          replacement_token,
+          repair_description
+        )
+
+      !in_string && String.slice(input, pos, String.length(search_token)) == search_token ->
+        # Check if this is a word boundary (not part of a larger identifier)
+        if is_word_boundary(input, pos, search_token) do
+          repair = create_repair("normalized literal", repair_description, pos)
+
+          replace_literal_char_by_char(
+            input,
+            result <> replacement_token,
+            pos + String.length(search_token),
+            false,
+            false,
+            nil,
+            [repair | repairs],
+            search_token,
+            replacement_token,
+            repair_description
+          )
+        else
+          replace_literal_char_by_char(
+            input,
+            result <> char,
+            pos + 1,
+            in_string,
+            false,
+            quote_char,
+            repairs,
+            search_token,
+            replacement_token,
+            repair_description
+          )
+        end
+
+      true ->
+        replace_literal_char_by_char(
+          input,
+          result <> char,
+          pos + 1,
+          in_string,
+          false,
+          quote_char,
+          repairs,
+          search_token,
+          replacement_token,
+          repair_description
+        )
+    end
+  end
+
+  # Check if a token match is at a word boundary
+  defp is_word_boundary(input, pos, token) do
+    token_length = String.length(token)
+
+    # Check character before token
+    before_ok =
+      if pos == 0 do
+        true
+      else
+        prev_char = String.at(input, pos - 1)
+        !is_identifier_char(prev_char)
+      end
+
+    # Check character after token
+    after_ok =
+      if pos + token_length >= byte_size(input) do
+        true
+      else
+        next_char = String.at(input, pos + token_length)
+        !is_identifier_char(next_char)
+      end
+
+    before_ok && after_ok
+  end
+
+  # Consume whitespace and return {whitespace_string, new_position}
+  defp consume_whitespace(input, pos) do
+    consume_whitespace_acc(input, pos, pos, "")
+  end
+
+  defp consume_whitespace_acc(input, current_pos, _start_pos, acc)
+       when current_pos >= byte_size(input) do
+    {acc, current_pos}
+  end
+
+  defp consume_whitespace_acc(input, current_pos, start_pos, acc) do
+    char = String.at(input, current_pos)
+
+    if char in [" ", "\t", "\n", "\r"] do
+      consume_whitespace_acc(input, current_pos + 1, start_pos, acc <> char)
+    else
+      {acc, current_pos}
+    end
+  end
+
+  defp fix_trailing_commas_processor(input) do
+    fix_commas(input)
+  end
+
+  @doc """
+  Check if a position in the input is inside a string literal.
+  Used to avoid applying repairs to string content.
+  """
+  @spec inside_string?(input :: String.t(), position :: non_neg_integer()) :: boolean()
+  def inside_string?(input, position) do
+    check_string_context(input, position, 0, false, false, nil)
+  end
+
+  # Helper function to check if position is inside a string
+  defp check_string_context(_input, position, current_pos, in_string, _escape_next, _quote)
+       when current_pos >= position do
+    in_string
+  end
+
+  defp check_string_context(input, position, current_pos, in_string, escape_next, quote)
+       when current_pos < byte_size(input) do
+    char = String.at(input, current_pos)
+
+    cond do
+      escape_next ->
+        check_string_context(input, position, current_pos + 1, in_string, false, quote)
+
+      in_string && char == "\\" ->
+        check_string_context(input, position, current_pos + 1, in_string, true, quote)
+
+      in_string && char == quote ->
+        check_string_context(input, position, current_pos + 1, false, false, nil)
+
+      in_string ->
+        check_string_context(input, position, current_pos + 1, in_string, false, quote)
+
+      char == "\"" ->
+        check_string_context(input, position, current_pos + 1, true, false, "\"")
+
+      char == "'" ->
+        check_string_context(input, position, current_pos + 1, true, false, "'")
+
+      true ->
+        check_string_context(input, position, current_pos + 1, false, false, nil)
+    end
+  end
+
+  defp check_string_context(_input, _position, _current_pos, in_string, _escape_next, _quote) do
+    in_string
+  end
+
+  @doc """
+  Apply a single syntax rule with context awareness.
+  """
+  @spec apply_rule(input :: String.t(), rule :: syntax_rule()) ::
+          {String.t(), [repair_action()]}
+  def apply_rule(input, rule) do
+    if rule.condition && !rule.condition.(input) do
+      {input, []}
+    else
+      rule.processor.(input)
+    end
+  end
+
+  @doc """
+  Add quotes around unquoted keys.
+  """
+  @spec quote_unquoted_keys(input :: String.t()) :: {String.t(), [repair_action()]}
+  def quote_unquoted_keys(input) do
+    quote_unquoted_keys_direct(input)
+  end
+
+  # Direct implementation of quote_unquoted_keys without regex
+  defp quote_unquoted_keys_direct(input) do
+    quote_unquoted_keys_char_by_char(input, "", 0, false, false, nil, [])
+  end
+
+  defp quote_unquoted_keys_char_by_char(
+         input,
+         result,
+         pos,
+         _in_string,
+         _escape_next,
+         _quote_char,
+         repairs
+       )
+       when pos >= byte_size(input) do
+    {result, repairs}
+  end
+
+  defp quote_unquoted_keys_char_by_char(
+         input,
+         result,
+         pos,
+         in_string,
+         escape_next,
+         quote_char,
+         repairs
+       ) do
+    char = String.at(input, pos)
+
+    cond do
+      escape_next ->
+        quote_unquoted_keys_char_by_char(
+          input,
+          result <> char,
+          pos + 1,
+          in_string,
+          false,
+          quote_char,
+          repairs
+        )
+
+      in_string && char == "\\" ->
+        quote_unquoted_keys_char_by_char(
+          input,
+          result <> char,
+          pos + 1,
+          in_string,
+          true,
+          quote_char,
+          repairs
+        )
+
+      in_string && char == quote_char ->
+        quote_unquoted_keys_char_by_char(
+          input,
+          result <> char,
+          pos + 1,
+          false,
+          false,
+          nil,
+          repairs
+        )
+
+      in_string ->
+        quote_unquoted_keys_char_by_char(
+          input,
+          result <> char,
+          pos + 1,
+          in_string,
+          false,
+          quote_char,
+          repairs
+        )
+
+      char == "\"" || char == "'" ->
+        quote_unquoted_keys_char_by_char(
+          input,
+          result <> char,
+          pos + 1,
+          true,
+          false,
+          char,
+          repairs
+        )
+
+      !in_string && (char == "{" || char == ",") ->
+        # Look ahead for unquoted key after { or ,
+        {new_result, new_pos, new_repairs} =
+          maybe_quote_next_key(input, result <> char, pos + 1, repairs)
+
+        quote_unquoted_keys_char_by_char(
+          input,
+          new_result,
+          new_pos,
+          false,
+          false,
+          nil,
+          new_repairs
+        )
+
+      true ->
+        quote_unquoted_keys_char_by_char(
+          input,
+          result <> char,
+          pos + 1,
+          in_string,
+          false,
+          quote_char,
+          repairs
+        )
+    end
+  end
+
+  defp maybe_quote_next_key(input, result, pos, repairs) when pos >= byte_size(input) do
+    {result, pos, repairs}
+  end
+
+  defp maybe_quote_next_key(input, result, pos, repairs) do
+    # Skip whitespace
+    {whitespace, new_pos} = consume_whitespace(input, pos)
+
+    if new_pos >= byte_size(input) do
+      {result <> whitespace, new_pos, repairs}
+    else
+      char = String.at(input, new_pos)
+
+      if is_identifier_start(char) do
+        # Found potential unquoted key
+        {identifier, chars_consumed} = consume_identifier(input, new_pos)
+        after_identifier_pos = new_pos + chars_consumed
+
+        # Check if followed by colon (possibly with whitespace)
+        {whitespace_after, pos_after_ws} = consume_whitespace(input, after_identifier_pos)
+
+        if pos_after_ws < byte_size(input) && String.at(input, pos_after_ws) == ":" do
+          # This is an unquoted key - add quotes
+          repair =
+            create_repair(
+              "quoted unquoted key",
+              "Added quotes around unquoted key '#{identifier}'",
+              new_pos
+            )
+
+          new_result = result <> whitespace <> "\"" <> identifier <> "\"" <> whitespace_after
+          {new_result, pos_after_ws, [repair | repairs]}
+        else
+          # Not a key, just regular content
+          {result <> whitespace <> identifier, after_identifier_pos, repairs}
+        end
+      else
+        # Not an identifier start
+        {result <> whitespace, new_pos, repairs}
+      end
+    end
+  end
+
+  @doc """
+  Normalize boolean and null literals.
+  """
+  @spec normalize_literals(input :: String.t()) :: {String.t(), [repair_action()]}
+  def normalize_literals(input) do
+    normalize_literals_direct(input)
+  end
+
+  @doc """
+  Add missing colons in object key-value pairs.
+  """
+  @spec fix_colons(input :: String.t()) :: {String.t(), [repair_action()]}
+  def fix_colons(input) do
+    add_missing_colons(input, [])
+  end
+
+  @doc """
+  Validate that a syntax rule is well-formed.
+  """
+  @spec validate_rule(rule :: syntax_rule()) :: :ok | {:error, String.t()}
+  def validate_rule(rule) do
+    cond do
+      !is_binary(rule.name) ->
+        {:error, "Rule name must be a string"}
+
+      !is_function(rule.processor, 1) ->
+        {:error, "Rule processor must be a function/1"}
+
+      rule.condition && !is_function(rule.condition, 1) ->
+        {:error, "Rule condition must be a function/1 or nil"}
+
+      true ->
+        :ok
+    end
+  end
+
+  @doc """
+  Get position information for error reporting.
+  """
+  @spec get_position_info(input :: String.t(), position :: non_neg_integer()) ::
+          %{line: pos_integer(), column: pos_integer(), context: String.t()}
+  def get_position_info(input, position) do
+    lines = String.split(input, "\n")
+
+    {line_num, column, _} =
+      Enum.reduce_while(lines, {1, 1, 0}, fn line, {current_line, _col, char_count} ->
+        # +1 for newline
+        line_length = String.length(line) + 1
+
+        if char_count + line_length > position do
+          column = position - char_count + 1
+          {:halt, {current_line, column, char_count}}
+        else
+          {:cont, {current_line + 1, 1, char_count + line_length}}
+        end
+      end)
+
+    context_start = max(0, position - 20)
+    context_end = min(String.length(input), position + 20)
+    context = String.slice(input, context_start, context_end - context_start)
+
+    %{
+      line: line_num,
+      column: column,
+      context: context
+    }
   end
 
   # Main normalization function using character-by-character parsing
@@ -1310,13 +1907,13 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
     end
   end
 
-  defp create_repair(action, description, position) do
+  defp create_repair(action, _description, position) do
     %{
-      layer: "layer3",
+      layer: :syntax_normalization,
       action: action,
-      description: description,
       position: position,
-      timestamp: DateTime.utc_now()
+      original: nil,
+      replacement: nil
     }
   end
 
