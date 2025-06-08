@@ -65,7 +65,7 @@ defmodule JsonRemedy do
       iex> JsonRemedy.repair(~s|[1, 2, 3,]|, logging: true)
       {:ok, [1, 2, 3], [%{layer: :layer3, action: "removed trailing comma"}]}
 
-      iex> JsonRemedy.repair(~s|```json\n{"valid": true}\n```|)
+      iex> JsonRemedy.repair(~s/```json\\n{"valid": true}\\n```/)
       {:ok, %{"valid" => true}}
   """
   @spec repair(binary(), [option()]) :: repair_result() | repair_result_with_logs()
@@ -113,7 +113,7 @@ defmodule JsonRemedy do
       iex> JsonRemedy.repair_to_string(~s|[1, 2, 3,]|)
       {:ok, "[1,2,3]"}
 
-      iex> JsonRemedy.repair_to_string(~s|```json\n{"test": true}\n```|)
+      iex> JsonRemedy.repair_to_string(~s/```json\\n{"test": true}\\n```/)
       {:ok, ~s|{"test":true}|}
   """
   @spec repair_to_string(binary(), [option()]) :: {:ok, binary()} | {:error, String.t()}
@@ -195,7 +195,7 @@ defmodule JsonRemedy do
       iex> JsonRemedy.can_repair?(~s|{name: "Alice"}|)
       true
 
-      iex> JsonRemedy.can_repair?(~s|```json\n{"test": true}\n```|)
+      iex> JsonRemedy.can_repair?(~s/```json\\n{"test": true}\\n```/)
       true
   """
   @spec can_repair?(binary()) :: boolean()
