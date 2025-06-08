@@ -625,8 +625,207 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
 
   # Direct implementation of quote_unquoted_keys without regex
   defp quote_unquoted_keys_direct(input) do
-    quote_unquoted_keys_char_by_char(input, "", 0, false, false, nil, [])
+    # Feature flag for optimization
+    if Application.get_env(:json_remedy, :layer3_iolist_optimization, true) do
+      quote_unquoted_keys_iolist(input)
+    else
+      quote_unquoted_keys_char_by_char(input, "", 0, false, false, nil, [])
+    end
   end
+
+  # ===== PHASE 1 OPTIMIZATION: IO LISTS =====
+  # Replace O(n²) string concatenation with O(1) IO list operations
+
+  # IO Lists optimized version - replaces string concatenation with O(1) operations
+  defp quote_unquoted_keys_iolist(input) do
+    {result_iolist, repairs} =
+      quote_unquoted_keys_char_by_char_iolist(input, [], 0, false, false, nil, [])
+
+    {IO.iodata_to_binary(result_iolist), repairs}
+  end
+
+  defp quote_unquoted_keys_char_by_char_iolist(
+         input,
+         result_iolist,
+         pos,
+         in_string,
+         escape_next,
+         quote_char,
+         repairs
+       ) do
+    if pos >= String.length(input) do
+      {result_iolist, repairs}
+    else
+      quote_unquoted_keys_char_by_char_continue_iolist(
+        input,
+        result_iolist,
+        pos,
+        in_string,
+        escape_next,
+        quote_char,
+        repairs
+      )
+    end
+  end
+
+  defp quote_unquoted_keys_char_by_char_continue_iolist(
+         input,
+         result_iolist,
+         pos,
+         in_string,
+         escape_next,
+         quote_char,
+         repairs
+       ) do
+    char = String.at(input, pos)
+
+    cond do
+      escape_next ->
+        quote_unquoted_keys_char_by_char_iolist(
+          input,
+          # ✅ O(1) instead of O(n²)
+          [result_iolist, char],
+          pos + 1,
+          in_string,
+          false,
+          quote_char,
+          repairs
+        )
+
+      in_string && char == "\\" ->
+        quote_unquoted_keys_char_by_char_iolist(
+          input,
+          # ✅ O(1) instead of O(n²)
+          [result_iolist, char],
+          pos + 1,
+          in_string,
+          true,
+          quote_char,
+          repairs
+        )
+
+      in_string && char == quote_char ->
+        quote_unquoted_keys_char_by_char_iolist(
+          input,
+          # ✅ O(1) instead of O(n²)
+          [result_iolist, char],
+          pos + 1,
+          false,
+          false,
+          nil,
+          repairs
+        )
+
+      in_string ->
+        quote_unquoted_keys_char_by_char_iolist(
+          input,
+          # ✅ O(1) instead of O(n²)
+          [result_iolist, char],
+          pos + 1,
+          in_string,
+          false,
+          quote_char,
+          repairs
+        )
+
+      char == "\"" || char == "'" ->
+        quote_unquoted_keys_char_by_char_iolist(
+          input,
+          # ✅ O(1) instead of O(n²)
+          [result_iolist, char],
+          pos + 1,
+          true,
+          false,
+          char,
+          repairs
+        )
+
+      !in_string && (char == "{" || char == ",") ->
+        # Look ahead for unquoted key after { or ,
+        {new_result_iolist, new_pos, new_repairs} =
+          maybe_quote_next_key_iolist(input, [result_iolist, char], pos + 1, repairs)
+
+        quote_unquoted_keys_char_by_char_iolist(
+          input,
+          new_result_iolist,
+          new_pos,
+          false,
+          false,
+          nil,
+          new_repairs
+        )
+
+      true ->
+        quote_unquoted_keys_char_by_char_iolist(
+          input,
+          # ✅ O(1) instead of O(n²)
+          [result_iolist, char],
+          pos + 1,
+          in_string,
+          false,
+          quote_char,
+          repairs
+        )
+    end
+  end
+
+  # IO list version of maybe_quote_next_key
+  defp maybe_quote_next_key_iolist(input, result_iolist, pos, repairs) do
+    if pos >= String.length(input) do
+      {result_iolist, pos, repairs}
+    else
+      maybe_quote_next_key_process_iolist(input, result_iolist, pos, repairs)
+    end
+  end
+
+  defp maybe_quote_next_key_process_iolist(input, result_iolist, pos, repairs) do
+    # Skip whitespace
+    {whitespace, new_pos} = consume_whitespace(input, pos)
+
+    if new_pos >= String.length(input) do
+      {[result_iolist, whitespace], new_pos, repairs}
+    else
+      char = String.at(input, new_pos)
+
+      if is_identifier_start(char) do
+        # Found potential unquoted key
+        {identifier, chars_consumed} = consume_identifier(input, new_pos)
+        after_identifier_pos = new_pos + chars_consumed
+
+        # Check if followed by colon (possibly with whitespace)
+        {whitespace_after, pos_after_ws} = consume_whitespace(input, after_identifier_pos)
+
+        if pos_after_ws < String.length(input) && String.at(input, pos_after_ws) == ":" do
+          # This is an unquoted key - add quotes
+          repair =
+            create_repair(
+              "quoted unquoted key",
+              "Added quotes around unquoted key '#{identifier}'",
+              new_pos
+            )
+
+          new_result_iolist = [
+            result_iolist,
+            whitespace,
+            "\"",
+            identifier,
+            "\"",
+            whitespace_after
+          ]
+
+          {new_result_iolist, pos_after_ws, [repair | repairs]}
+        else
+          # Not a key, just regular content
+          {[result_iolist, whitespace, identifier], after_identifier_pos, repairs}
+        end
+      else
+        # Not an identifier start
+        {[result_iolist, whitespace], new_pos, repairs}
+      end
+    end
+  end
+
+  # ===== END PHASE 1 OPTIMIZATION =====
 
   # UTF-8 safe version
   defp quote_unquoted_keys_char_by_char(
@@ -886,6 +1085,485 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
 
   # Main normalization function using character-by-character parsing
   defp normalize_syntax(content) do
+    # Feature flag for optimization phases
+    case Application.get_env(:json_remedy, :layer3_optimization_phase, 2) do
+      # Phase 2: Binary pattern matching
+      2 -> normalize_syntax_binary_optimized(content)
+      # Phase 1: IO lists
+      1 -> normalize_syntax_iolist(content)
+      # Original implementation
+      _ -> normalize_syntax_original(content)
+    end
+  end
+
+  # ===== PHASE 1 OPTIMIZATION: Main Processing with IO Lists =====
+  defp normalize_syntax_iolist(content) do
+    initial_state = %{
+      # ✅ Use IO list instead of string
+      result_iolist: [],
+      position: 0,
+      in_string: false,
+      escape_next: false,
+      string_quote: nil,
+      repairs: [],
+      context_stack: [],
+      expecting: :value
+    }
+
+    final_state = parse_characters_iolist(content, initial_state)
+
+    # Convert IO list to binary for post-processing
+    result_string = IO.iodata_to_binary(final_state.result_iolist)
+
+    # Post-process to remove trailing commas and add missing commas
+    {comma_processed, comma_repairs} = post_process_commas(result_string)
+
+    # Post-process to add missing colons
+    {colon_processed, colon_repairs} = add_missing_colons(comma_processed, [])
+
+    all_repairs = final_state.repairs ++ comma_repairs ++ colon_repairs
+    {colon_processed, all_repairs}
+  end
+
+  # ===== PHASE 2 OPTIMIZATION: Binary Pattern Matching =====
+  # This addresses the real O(n²) bottleneck: String.at/2 calls
+  defp normalize_syntax_binary_optimized(content) when is_binary(content) do
+    # Use a simpler approach: convert to binary processing but keep similar logic
+    normalize_syntax_binary_simple(content, [], [], false, false, nil, [], :value, 0)
+  end
+
+  # Simplified binary processing - processes byte by byte but without String.at/2
+  defp normalize_syntax_binary_simple(
+         <<>>,
+         result_iolist,
+         repairs,
+         _in_string,
+         _escape_next,
+         _quote,
+         _stack,
+         _expecting,
+         _pos
+       ) do
+    result_string = IO.iodata_to_binary(result_iolist)
+
+    # Post-process to remove trailing commas and add missing commas
+    {comma_processed, comma_repairs} = post_process_commas(result_string)
+
+    # Post-process to add missing colons
+    {colon_processed, colon_repairs} = add_missing_colons(comma_processed, [])
+
+    all_repairs = repairs ++ comma_repairs ++ colon_repairs
+    {colon_processed, all_repairs}
+  end
+
+  defp normalize_syntax_binary_simple(
+         <<char::utf8, rest::binary>>,
+         result_iolist,
+         repairs,
+         in_string,
+         escape_next,
+         quote,
+         stack,
+         expecting,
+         pos
+       ) do
+    char_str = <<char::utf8>>
+
+    cond do
+      escape_next ->
+        # Previous character was escape, add this character as-is
+        normalize_syntax_binary_simple(
+          rest,
+          [result_iolist, char_str],
+          repairs,
+          in_string,
+          false,
+          quote,
+          stack,
+          expecting,
+          pos + 1
+        )
+
+      in_string && char == ?\\ ->
+        # Escape character in string
+        normalize_syntax_binary_simple(
+          rest,
+          [result_iolist, char_str],
+          repairs,
+          in_string,
+          true,
+          quote,
+          stack,
+          expecting,
+          pos + 1
+        )
+
+      in_string && char_str == quote ->
+        # End of string - always use double quotes
+        new_expecting = determine_next_expecting_simple(expecting, stack)
+
+        normalize_syntax_binary_simple(
+          rest,
+          [result_iolist, "\""],
+          repairs,
+          false,
+          false,
+          nil,
+          stack,
+          new_expecting,
+          pos + 1
+        )
+
+      in_string ->
+        # Regular character inside string - preserve as-is
+        normalize_syntax_binary_simple(
+          rest,
+          [result_iolist, char_str],
+          repairs,
+          in_string,
+          escape_next,
+          quote,
+          stack,
+          expecting,
+          pos + 1
+        )
+
+      char == ?" ->
+        # Start of double-quoted string
+        new_expecting = determine_next_expecting_simple(expecting, stack)
+
+        normalize_syntax_binary_simple(
+          rest,
+          [result_iolist, "\""],
+          repairs,
+          true,
+          false,
+          "\"",
+          stack,
+          new_expecting,
+          pos + 1
+        )
+
+      char == ?' ->
+        # Start of single-quoted string - normalize to double quotes
+        repair = create_repair("normalized quotes", "Changed single quotes to double quotes", pos)
+        new_expecting = determine_next_expecting_simple(expecting, stack)
+
+        normalize_syntax_binary_simple(
+          rest,
+          [result_iolist, "\""],
+          [repair | repairs],
+          true,
+          false,
+          "'",
+          stack,
+          new_expecting,
+          pos + 1
+        )
+
+      char == ?{ ->
+        # Object start
+        normalize_syntax_binary_simple(
+          rest,
+          [result_iolist, char_str],
+          repairs,
+          in_string,
+          escape_next,
+          quote,
+          [:object | stack],
+          :key,
+          pos + 1
+        )
+
+      char == ?} ->
+        # Object end
+        {new_stack, _} = pop_stack_safe(stack)
+        new_expecting = determine_expecting_after_close_simple(new_stack)
+
+        normalize_syntax_binary_simple(
+          rest,
+          [result_iolist, char_str],
+          repairs,
+          in_string,
+          escape_next,
+          quote,
+          new_stack,
+          new_expecting,
+          pos + 1
+        )
+
+      char == ?[ ->
+        # Array start
+        normalize_syntax_binary_simple(
+          rest,
+          [result_iolist, char_str],
+          repairs,
+          in_string,
+          escape_next,
+          quote,
+          [:array | stack],
+          :value,
+          pos + 1
+        )
+
+      char == ?] ->
+        # Array end
+        {new_stack, _} = pop_stack_safe(stack)
+        new_expecting = determine_expecting_after_close_simple(new_stack)
+
+        normalize_syntax_binary_simple(
+          rest,
+          [result_iolist, char_str],
+          repairs,
+          in_string,
+          escape_next,
+          quote,
+          new_stack,
+          new_expecting,
+          pos + 1
+        )
+
+      char == ?: ->
+        # Colon
+        normalize_syntax_binary_simple(
+          rest,
+          [result_iolist, char_str],
+          repairs,
+          in_string,
+          escape_next,
+          quote,
+          stack,
+          :value,
+          pos + 1
+        )
+
+      char == ?, ->
+        # Comma
+        new_expecting =
+          case List.first(stack) do
+            :object -> :key
+            :array -> :value
+            _ -> :value
+          end
+
+        normalize_syntax_binary_simple(
+          rest,
+          [result_iolist, char_str],
+          repairs,
+          in_string,
+          escape_next,
+          quote,
+          stack,
+          new_expecting,
+          pos + 1
+        )
+
+      char in [?\s, ?\t, ?\n, ?\r] ->
+        # Whitespace - preserve but don't change expectations
+        normalize_syntax_binary_simple(
+          rest,
+          [result_iolist, char_str],
+          repairs,
+          in_string,
+          escape_next,
+          quote,
+          stack,
+          expecting,
+          pos + 1
+        )
+
+      is_identifier_start_char_simple(char) ->
+        # Start of identifier - process with binary matching
+        process_identifier_binary_simple(
+          <<char::utf8, rest::binary>>,
+          result_iolist,
+          repairs,
+          in_string,
+          escape_next,
+          quote,
+          stack,
+          expecting,
+          pos
+        )
+
+      char in [?0, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?-, ?+] ->
+        # Start of number - process with binary matching
+        process_number_binary_simple(
+          <<char::utf8, rest::binary>>,
+          result_iolist,
+          repairs,
+          in_string,
+          escape_next,
+          quote,
+          stack,
+          expecting,
+          pos
+        )
+
+      true ->
+        # Other character - pass through
+        normalize_syntax_binary_simple(
+          rest,
+          [result_iolist, char_str],
+          repairs,
+          in_string,
+          escape_next,
+          quote,
+          stack,
+          expecting,
+          pos + 1
+        )
+    end
+  end
+
+  # Helper functions for binary optimization - UTF-8 safe
+  defp is_identifier_start_char_simple(char) when char >= ?a and char <= ?z, do: true
+  defp is_identifier_start_char_simple(char) when char >= ?A and char <= ?Z, do: true
+  defp is_identifier_start_char_simple(?_), do: true
+  # Allow UTF-8 characters (> 127) to be part of identifiers
+  defp is_identifier_start_char_simple(char) when char > 127, do: true
+  defp is_identifier_start_char_simple(_), do: false
+
+  defp determine_next_expecting_simple(_expecting, _stack), do: :value
+  defp determine_expecting_after_close_simple([]), do: :value
+  defp determine_expecting_after_close_simple([:object | _]), do: :value
+  defp determine_expecting_after_close_simple([:array | _]), do: :value
+  defp determine_expecting_after_close_simple(_), do: :value
+
+  # Process identifiers with binary pattern matching
+  defp process_identifier_binary_simple(
+         binary,
+         result_iolist,
+         repairs,
+         in_string,
+         escape_next,
+         quote,
+         stack,
+         expecting,
+         pos
+       ) do
+    {identifier, remaining, chars_consumed} = consume_identifier_binary_simple(binary)
+
+    {result_addition, new_repairs} =
+      case identifier do
+        "True" ->
+          repair = create_repair("normalized boolean", "Normalized boolean True -> true", pos)
+          {"true", [repair]}
+
+        "TRUE" ->
+          repair = create_repair("normalized boolean", "Normalized boolean TRUE -> true", pos)
+          {"true", [repair]}
+
+        "False" ->
+          repair = create_repair("normalized boolean", "Normalized boolean False -> false", pos)
+          {"false", [repair]}
+
+        "FALSE" ->
+          repair = create_repair("normalized boolean", "Normalized boolean FALSE -> false", pos)
+          {"false", [repair]}
+
+        "None" ->
+          repair = create_repair("normalized null", "Normalized None -> null", pos)
+          {"null", [repair]}
+
+        "NULL" ->
+          repair = create_repair("normalized null", "Normalized NULL -> null", pos)
+          {"null", [repair]}
+
+        "Null" ->
+          repair = create_repair("normalized null", "Normalized Null -> null", pos)
+          {"null", [repair]}
+
+        _ when expecting == :key ->
+          repair =
+            create_repair(
+              "quoted unquoted key",
+              "Added quotes around unquoted key '#{identifier}'",
+              pos
+            )
+
+          {"\"" <> identifier <> "\"", [repair]}
+
+        _ ->
+          {identifier, []}
+      end
+
+    new_expecting = determine_next_expecting_simple(expecting, stack)
+
+    normalize_syntax_binary_simple(
+      remaining,
+      [result_iolist, result_addition],
+      new_repairs ++ repairs,
+      in_string,
+      escape_next,
+      quote,
+      stack,
+      new_expecting,
+      pos + chars_consumed
+    )
+  end
+
+  # Process numbers with binary pattern matching
+  defp process_number_binary_simple(
+         binary,
+         result_iolist,
+         repairs,
+         in_string,
+         escape_next,
+         quote,
+         stack,
+         expecting,
+         pos
+       ) do
+    {number, remaining, chars_consumed} = consume_number_binary_simple(binary)
+
+    new_expecting = determine_next_expecting_simple(expecting, stack)
+
+    normalize_syntax_binary_simple(
+      remaining,
+      [result_iolist, number],
+      repairs,
+      in_string,
+      escape_next,
+      quote,
+      stack,
+      new_expecting,
+      pos + chars_consumed
+    )
+  end
+
+  # Binary pattern matching for identifier consumption - UTF-8 safe
+  defp consume_identifier_binary_simple(binary),
+    do: consume_identifier_binary_simple(binary, <<>>, 0)
+
+  defp consume_identifier_binary_simple(<<char::utf8, rest::binary>>, acc, count)
+       when (char >= ?a and char <= ?z) or (char >= ?A and char <= ?Z) or
+              (char >= ?0 and char <= ?9) or char == ?_ or char > 127 do
+    # UTF-8 safe: char > 127 allows all UTF-8 multi-byte characters
+    consume_identifier_binary_simple(rest, <<acc::binary, char::utf8>>, count + 1)
+  end
+
+  defp consume_identifier_binary_simple(remaining, acc, count) do
+    {acc, remaining, count}
+  end
+
+  # Binary pattern matching for number consumption
+  defp consume_number_binary_simple(binary), do: consume_number_binary_simple(binary, <<>>, 0)
+
+  defp consume_number_binary_simple(<<char::utf8, rest::binary>>, acc, count)
+       when (char >= ?0 and char <= ?9) or char == ?. or char == ?- or char == ?+ or
+              char == ?e or char == ?E do
+    consume_number_binary_simple(rest, <<acc::binary, char::utf8>>, count + 1)
+  end
+
+  defp consume_number_binary_simple(remaining, acc, count) do
+    {acc, remaining, count}
+  end
+
+  # ===== END PHASE 2 OPTIMIZATION =====
+
+  # Original implementation for fallback
+  defp normalize_syntax_original(content) do
     initial_state = %{
       result: "",
       position: 0,
@@ -917,6 +1595,18 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
       char = String.at(content, state.position)
       new_state = process_character(char, content, state)
       parse_characters(content, %{new_state | position: new_state.position + 1})
+    end
+  end
+
+  # ===== PHASE 1 OPTIMIZATION: IO Lists Parser =====
+  # Character-by-character parser with IO lists - UTF-8 safe
+  defp parse_characters_iolist(content, state) do
+    if state.position >= String.length(content) do
+      state
+    else
+      char = String.at(content, state.position)
+      new_state = process_character_iolist(char, content, state)
+      parse_characters_iolist(content, %{new_state | position: new_state.position + 1})
     end
   end
 
@@ -980,6 +1670,134 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
       true ->
         # Other character - pass through
         %{state | result: state.result <> char}
+    end
+  end
+
+  # ===== PHASE 1 OPTIMIZATION: IO Lists Character Processing =====
+  # Process individual characters with context awareness - IO list version
+  defp process_character_iolist(char, content, state) do
+    cond do
+      state.escape_next ->
+        # Previous character was escape, add this character as-is
+        %{state | result_iolist: [state.result_iolist, char], escape_next: false}
+
+      state.in_string && char == "\\" ->
+        # Escape character in string
+        %{state | result_iolist: [state.result_iolist, char], escape_next: true}
+
+      state.in_string && char == state.string_quote ->
+        # End of string
+        %{
+          state
+          | # Always use double quotes
+            result_iolist: [state.result_iolist, "\""],
+            in_string: false,
+            string_quote: nil,
+            expecting: determine_next_expecting(state)
+        }
+
+      state.in_string ->
+        # Regular character inside string - preserve as-is
+        %{state | result_iolist: [state.result_iolist, char]}
+
+      char == "\"" ->
+        # Start of double-quoted string
+        %{
+          state
+          | result_iolist: [state.result_iolist, "\""],
+            in_string: true,
+            string_quote: "\"",
+            expecting: determine_next_expecting(state)
+        }
+
+      char == "'" ->
+        # Start of single-quoted string - normalize to double quotes
+        repair =
+          create_repair(
+            "normalized quotes",
+            "Changed single quotes to double quotes",
+            state.position
+          )
+
+        %{
+          state
+          | result_iolist: [state.result_iolist, "\""],
+            in_string: true,
+            string_quote: "'",
+            repairs: [repair | state.repairs],
+            expecting: determine_next_expecting(state)
+        }
+
+      char == "{" ->
+        # Object start
+        %{
+          state
+          | result_iolist: [state.result_iolist, char],
+            context_stack: [:object | state.context_stack],
+            expecting: :key
+        }
+
+      char == "}" ->
+        # Object end
+        {new_stack, _} = pop_stack_safe(state.context_stack)
+
+        %{
+          state
+          | result_iolist: [state.result_iolist, char],
+            context_stack: new_stack,
+            expecting: determine_expecting_after_close(new_stack)
+        }
+
+      char == "[" ->
+        # Array start
+        %{
+          state
+          | result_iolist: [state.result_iolist, char],
+            context_stack: [:array | state.context_stack],
+            expecting: :value
+        }
+
+      char == "]" ->
+        # Array end
+        {new_stack, _} = pop_stack_safe(state.context_stack)
+
+        %{
+          state
+          | result_iolist: [state.result_iolist, char],
+            context_stack: new_stack,
+            expecting: determine_expecting_after_close(new_stack)
+        }
+
+      char == ":" ->
+        # Colon
+        %{state | result_iolist: [state.result_iolist, char], expecting: :value}
+
+      char == "," ->
+        # Comma
+        new_expecting =
+          case List.first(state.context_stack) do
+            :object -> :key
+            :array -> :value
+            _ -> :value
+          end
+
+        %{state | result_iolist: [state.result_iolist, char], expecting: new_expecting}
+
+      char in [" ", "\t", "\n", "\r"] ->
+        # Whitespace - preserve but don't change expectations
+        %{state | result_iolist: [state.result_iolist, char]}
+
+      is_identifier_start(char) ->
+        # Start of identifier - could be unquoted key, boolean, null, etc.
+        process_identifier_iolist(content, state)
+
+      char in ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "-", "+"] ->
+        # Start of number
+        process_number_iolist(content, state)
+
+      true ->
+        # Other character - pass through
+        %{state | result_iolist: [state.result_iolist, char]}
     end
   end
 
@@ -1108,6 +1926,106 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
         # Other character - pass through
         %{state | result: state.result <> char}
     end
+  end
+
+  # ===== PHASE 1 OPTIMIZATION: IO Lists Helper Functions =====
+  # Process identifiers (unquoted keys, booleans, null values) - IO list version
+  defp process_identifier_iolist(content, state) do
+    {identifier, chars_consumed} = consume_identifier(content, state.position)
+
+    cond do
+      # Check for boolean values that need normalization
+      identifier in ["True", "TRUE"] ->
+        repair =
+          create_repair(
+            "normalized boolean",
+            "Normalized boolean #{identifier} -> true",
+            state.position
+          )
+
+        %{
+          state
+          | result_iolist: [state.result_iolist, "true"],
+            position: state.position + chars_consumed - 1,
+            repairs: [repair | state.repairs],
+            expecting: determine_next_expecting(state)
+        }
+
+      identifier in ["False", "FALSE"] ->
+        repair =
+          create_repair(
+            "normalized boolean",
+            "Normalized boolean #{identifier} -> false",
+            state.position
+          )
+
+        %{
+          state
+          | result_iolist: [state.result_iolist, "false"],
+            position: state.position + chars_consumed - 1,
+            repairs: [repair | state.repairs],
+            expecting: determine_next_expecting(state)
+        }
+
+      # Check for null values that need normalization
+      identifier in ["None", "NULL", "Null"] ->
+        repair =
+          create_repair("normalized null", "Normalized #{identifier} -> null", state.position)
+
+        %{
+          state
+          | result_iolist: [state.result_iolist, "null"],
+            position: state.position + chars_consumed - 1,
+            repairs: [repair | state.repairs],
+            expecting: determine_next_expecting(state)
+        }
+
+      # Check if this should be a quoted key
+      state.expecting == :key ->
+        repair =
+          create_repair(
+            "quoted unquoted key",
+            "Added quotes around unquoted key '#{identifier}'",
+            state.position
+          )
+
+        %{
+          state
+          | result_iolist: [state.result_iolist, "\"", identifier, "\""],
+            position: state.position + chars_consumed - 1,
+            repairs: [repair | state.repairs],
+            expecting: :colon
+        }
+
+      # Standard literals that don't need normalization
+      identifier in ["true", "false", "null"] ->
+        %{
+          state
+          | result_iolist: [state.result_iolist, identifier],
+            position: state.position + chars_consumed - 1,
+            expecting: determine_next_expecting(state)
+        }
+
+      true ->
+        # Unknown identifier - pass through
+        %{
+          state
+          | result_iolist: [state.result_iolist, identifier],
+            position: state.position + chars_consumed - 1
+        }
+    end
+  end
+
+  # Process numbers - IO list version
+  defp process_number_iolist(content, state) do
+    {number, chars_consumed} = consume_number(content, state.position)
+
+    %{
+      state
+      | result_iolist: [state.result_iolist, number],
+        position: state.position + chars_consumed - 1,
+        expecting: determine_next_expecting(state)
+    }
   end
 
   # Process identifiers (unquoted keys, booleans, null values)

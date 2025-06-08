@@ -1,0 +1,34 @@
+{
+  "timestamp": "2025-06-08T05:34:22.502455Z",
+  "measurements": [
+    {
+      "size": 10,
+      "success": true,
+      "input_kb": 0.54,
+      "time_ms": 4.3,
+      "rate_kb_s": 125.5
+    },
+    {
+      "size": 25,
+      "success": true,
+      "input_kb": 1.37,
+      "time_ms": 2.3,
+      "rate_kb_s": 588.7
+    },
+    {
+      "size": 50,
+      "success": true,
+      "input_kb": 2.75,
+      "time_ms": 7.0,
+      "rate_kb_s": 393.2
+    },
+    {
+      "size": 100,
+      "success": true,
+      "input_kb": 5.53,
+      "time_ms": 27.3,
+      "rate_kb_s": 202.6
+    }
+  ],
+  "total_time_ms": 40.9
+}
