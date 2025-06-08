@@ -9,7 +9,7 @@
 
 A comprehensive, production-ready JSON repair library for Elixir that intelligently fixes malformed JSON strings from any source—LLMs, legacy systems, data pipelines, streaming APIs, and human input.
 
-**JsonRemedy** uses a sophisticated 5-layer repair pipeline where each layer employs the most appropriate technique: regex for content cleaning, state machines for structural repairs, character-by-character parsing for syntax normalization, and battle-tested parsers for validation. The result is a robust system that handles virtually any JSON malformation while preserving valid content.
+**JsonRemedy** uses a sophisticated 5-layer repair pipeline where each layer employs the most appropriate technique: content cleaning, state machines for structural repairs, character-by-character parsing for syntax normalization, and battle-tested parsers for validation. The result is a robust system that handles virtually any JSON malformation while preserving valid content.
 
 ## The Problem
 
@@ -432,7 +432,7 @@ JsonRemedy's strength comes from its pragmatic, layered approach where each laye
 defmodule JsonRemedy.LayeredRepair do
   def repair(input) do
     input
-    |> Layer1.content_cleaning()      # Regex: Remove wrappers, comments, normalize encoding
+    |> Layer1.content_cleaning()      # Cleaning: Remove wrappers, comments, normalize encoding
     |> Layer2.structural_repair()     # State machine: Fix delimiters, nesting, structure  
     |> Layer3.syntax_normalization()  # Char parsing: Fix quotes, booleans, commas
     |> Layer4.validation_attempt()    # Jason.decode: Fast path for clean JSON
@@ -442,9 +442,9 @@ end
 ```
 
 ### 🧹 **Layer 1: Content Cleaning**
-**Technique**: Regex and string operations (perfect for this job)
+**Technique**: String operations
 - Removes code fences, comments, wrapper text
-- Normalizes encoding and whitespace  
+- Normalizes encoding and whitespace
 - Extracts JSON from prose and HTML
 - Handles streaming artifacts
 
