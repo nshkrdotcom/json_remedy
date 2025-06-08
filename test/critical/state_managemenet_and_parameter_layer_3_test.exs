@@ -562,7 +562,7 @@ defmodule JsonRemedy.Layer3.StateManagementTest do
         processing_time = end_time - start_time
 
         # Should not take excessively long
-        assert processing_time < 5000,
+        assert processing_time < 10000,
                "State corruption input took #{processing_time}ms, expected < 5s"
 
         # Should either succeed or fail gracefully

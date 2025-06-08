@@ -1352,7 +1352,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
   Process input string and apply Layer 3 syntax normalization repairs.
   """
   @spec process(input :: String.t(), context :: repair_context()) :: layer_result()
-  def process(input, context) do
+  def process(input, context) when is_binary(input) and is_map(context) do
     try do
       {fixed_content, repairs} = normalize_syntax(input)
 
@@ -1367,6 +1367,19 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
       error ->
         {:error, "Layer 3 Syntax Normalization failed: #{inspect(error)}"}
     end
+  end
+
+  # Handle nil or invalid inputs gracefully
+  def process(nil, context) when is_map(context) do
+    {:error, "Input cannot be nil"}
+  end
+
+  def process(input, _context) when not is_binary(input) do
+    {:error, "Input must be a string, got: #{inspect(input)}"}
+  end
+
+  def process(_input, context) when not is_map(context) do
+    {:error, "Context must be a map, got: #{inspect(context)}"}
   end
 
   @doc """
@@ -1442,7 +1455,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
   Public API function to normalize quotes only.
   """
   @spec normalize_quotes(input :: String.t()) :: {String.t(), [repair_action()]}
-  def normalize_quotes(input) do
+  def normalize_quotes(input) when is_binary(input) do
     # Run only quote normalization
     initial_state = %{
       result: "",
@@ -1459,11 +1472,15 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
     {final_state.result, final_state.repairs}
   end
 
+  # Handle nil input gracefully
+  def normalize_quotes(nil), do: {"", []}
+  def normalize_quotes(input) when not is_binary(input), do: {inspect(input), []}
+
   @doc """
   Public API function to normalize booleans only.
   """
   @spec normalize_booleans(input :: String.t()) :: {String.t(), [repair_action()]}
-  def normalize_booleans(input) do
+  def normalize_booleans(input) when is_binary(input) do
     # Simple replacement for boolean normalization
     result =
       input
@@ -1505,13 +1522,21 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
     {result, repairs}
   end
 
+  # Handle nil input gracefully
+  def normalize_booleans(nil), do: {"", []}
+  def normalize_booleans(input) when not is_binary(input), do: {inspect(input), []}
+
   @doc """
   Public API function to fix commas only.
   """
   @spec fix_commas(input :: String.t()) :: {String.t(), [repair_action()]}
-  def fix_commas(input) do
+  def fix_commas(input) when is_binary(input) do
     post_process_commas(input)
   end
+
+  # Handle nil input gracefully
+  def fix_commas(nil), do: {"", []}
+  def fix_commas(input) when not is_binary(input), do: {inspect(input), []}
 
   @doc """
   Get default syntax normalization rules.
@@ -1543,20 +1568,29 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
   end
 
   # Processor functions for rules (non-regex implementations)
-  defp quote_unquoted_keys_processor(input) do
+  defp quote_unquoted_keys_processor(input) when is_binary(input) do
     quote_unquoted_keys_direct(input)
   end
 
-  defp normalize_quotes_processor(input) do
+  defp quote_unquoted_keys_processor(nil), do: {"", []}
+  defp quote_unquoted_keys_processor(input), do: {inspect(input), []}
+
+  defp normalize_quotes_processor(input) when is_binary(input) do
     normalize_quotes(input)
   end
 
-  defp normalize_literals_processor(input) do
+  defp normalize_quotes_processor(nil), do: {"", []}
+  defp normalize_quotes_processor(input), do: {inspect(input), []}
+
+  defp normalize_literals_processor(input) when is_binary(input) do
     normalize_literals_direct(input)
   end
 
+  defp normalize_literals_processor(nil), do: {"", []}
+  defp normalize_literals_processor(input), do: {inspect(input), []}
+
   # Optimized single-pass implementation of normalize_literals
-  defp normalize_literals_direct(input) do
+  defp normalize_literals_direct(input) when is_binary(input) do
     # Define all literal replacements
     replacements = [
       {"True", "true", "normalized boolean True -> true"},
@@ -1571,23 +1605,36 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
     replace_all_literals_single_pass(input, "", 0, false, false, nil, [], replacements)
   end
 
-  # Single-pass replacement for all literals
-  # TODO: Fix UTF-8 safety - using byte_size instead of String.length due to guard limitations
+  # Single-pass replacement for all literals - UTF-8 safe
   defp replace_all_literals_single_pass(
          input,
          result,
          pos,
-         _in_string,
-         _escape_next,
-         _quote_char,
+         in_string,
+         escape_next,
+         quote_char,
          repairs,
-         _replacements
+         replacements
        )
-       when pos >= byte_size(input) do
-    {result, repairs}
+       when is_binary(input) do
+    # UTF-8 safe bounds checking using String.length
+    if pos >= String.length(input) do
+      {result, repairs}
+    else
+      replace_all_literals_single_pass_continue(
+        input,
+        result,
+        pos,
+        in_string,
+        escape_next,
+        quote_char,
+        repairs,
+        replacements
+      )
+    end
   end
 
-  defp replace_all_literals_single_pass(
+  defp replace_all_literals_single_pass_continue(
          input,
          result,
          pos,
@@ -1717,16 +1764,33 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
     end
   end
 
-  # Find the first matching literal replacement at the current position
+  # Find matching literal at current position
   defp find_matching_literal(input, pos, replacements) do
-    Enum.find_value(replacements, :no_match, fn {search_token, replacement_token,
-                                                 repair_description} ->
-      if String.slice(input, pos, String.length(search_token)) == search_token do
-        {:match, search_token, replacement_token, repair_description}
-      else
-        nil
-      end
-    end)
+    find_matching_literal_recursive(input, pos, replacements)
+  end
+
+  defp find_matching_literal_recursive(_input, _pos, []) do
+    :no_match
+  end
+
+  defp find_matching_literal_recursive(input, pos, [{search, replacement, description} | rest]) do
+    if match_at_position?(input, pos, search) do
+      {:match, search, replacement, description}
+    else
+      find_matching_literal_recursive(input, pos, rest)
+    end
+  end
+
+  # Check if a string matches at a specific position (UTF-8 safe)
+  defp match_at_position?(input, pos, search_string) do
+    search_length = String.length(search_string)
+
+    if pos + search_length > String.length(input) do
+      false
+    else
+      substring = String.slice(input, pos, search_length)
+      substring == search_string
+    end
   end
 
   # Check if a token match is at a word boundary
@@ -1755,27 +1819,30 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
   end
 
   # Consume whitespace and return {whitespace_string, new_position}
-  defp consume_whitespace(input, pos) do
+  defp consume_whitespace(input, pos) when is_binary(input) and is_integer(pos) do
     consume_whitespace_acc(input, pos, pos, "")
   end
 
-  # TODO: Fix UTF-8 safety - using byte_size instead of String.length due to guard limitations
-  defp consume_whitespace_acc(input, current_pos, _start_pos, acc)
-       when current_pos >= byte_size(input) do
-    {acc, current_pos}
+  # UTF-8 safe version using String.length
+  defp consume_whitespace_acc(input, current_pos, _start_pos, acc) do
+    if current_pos >= String.length(input) do
+      {acc, current_pos}
+    else
+      consume_whitespace_acc_continue(input, current_pos, acc)
+    end
   end
 
-  defp consume_whitespace_acc(input, current_pos, start_pos, acc) do
+  defp consume_whitespace_acc_continue(input, current_pos, acc) do
     char = String.at(input, current_pos)
 
     if char in [" ", "\t", "\n", "\r"] do
-      consume_whitespace_acc(input, current_pos + 1, start_pos, acc <> char)
+      consume_whitespace_acc(input, current_pos + 1, nil, acc <> char)
     else
       {acc, current_pos}
     end
   end
 
-  defp fix_trailing_commas_processor(input) do
+  defp fix_trailing_commas_processor(input) when is_binary(input) do
     fix_commas(input)
   end
 
@@ -1784,9 +1851,16 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
   Used to avoid applying repairs to string content.
   """
   @spec inside_string?(input :: String.t(), position :: non_neg_integer()) :: boolean()
-  def inside_string?(input, position) do
+  def inside_string?(input, position)
+      when is_binary(input) and is_integer(position) and position >= 0 do
     check_string_context(input, position, 0, false, false, nil)
   end
+
+  # Handle invalid inputs gracefully
+  def inside_string?(nil, _position), do: false
+  def inside_string?(_input, position) when not is_integer(position), do: false
+  def inside_string?(_input, position) when position < 0, do: false
+  def inside_string?(input, _position) when not is_binary(input), do: false
 
   # Helper function to check if position is inside a string
   defp check_string_context(_input, position, current_pos, in_string, _escape_next, _quote)
@@ -1794,36 +1868,35 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
     in_string
   end
 
-  defp check_string_context(input, position, current_pos, in_string, escape_next, quote)
-       when current_pos < byte_size(input) do
-    char = String.at(input, current_pos)
+  defp check_string_context(input, position, current_pos, in_string, escape_next, quote) do
+    if current_pos >= String.length(input) do
+      in_string
+    else
+      char = String.at(input, current_pos)
 
-    cond do
-      escape_next ->
-        check_string_context(input, position, current_pos + 1, in_string, false, quote)
+      cond do
+        escape_next ->
+          check_string_context(input, position, current_pos + 1, in_string, false, quote)
 
-      in_string && char == "\\" ->
-        check_string_context(input, position, current_pos + 1, in_string, true, quote)
+        in_string && char == "\\" ->
+          check_string_context(input, position, current_pos + 1, in_string, true, quote)
 
-      in_string && char == quote ->
-        check_string_context(input, position, current_pos + 1, false, false, nil)
+        in_string && char == quote ->
+          check_string_context(input, position, current_pos + 1, false, false, nil)
 
-      in_string ->
-        check_string_context(input, position, current_pos + 1, in_string, false, quote)
+        in_string ->
+          check_string_context(input, position, current_pos + 1, in_string, false, quote)
 
-      char == "\"" ->
-        check_string_context(input, position, current_pos + 1, true, false, "\"")
+        char == "\"" ->
+          check_string_context(input, position, current_pos + 1, true, false, "\"")
 
-      char == "'" ->
-        check_string_context(input, position, current_pos + 1, true, false, "'")
+        char == "'" ->
+          check_string_context(input, position, current_pos + 1, true, false, "'")
 
-      true ->
-        check_string_context(input, position, current_pos + 1, false, false, nil)
+        true ->
+          check_string_context(input, position, current_pos + 1, false, false, nil)
+      end
     end
-  end
-
-  defp check_string_context(_input, _position, _current_pos, in_string, _escape_next, _quote) do
-    in_string
   end
 
   @doc """
@@ -1843,30 +1916,44 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
   Add quotes around unquoted keys.
   """
   @spec quote_unquoted_keys(input :: String.t()) :: {String.t(), [repair_action()]}
-  def quote_unquoted_keys(input) do
+  def quote_unquoted_keys(input) when is_binary(input) do
     quote_unquoted_keys_direct(input)
   end
+
+  def quote_unquoted_keys(nil), do: {"", []}
+  def quote_unquoted_keys(input) when not is_binary(input), do: {inspect(input), []}
 
   # Direct implementation of quote_unquoted_keys without regex
   defp quote_unquoted_keys_direct(input) do
     quote_unquoted_keys_char_by_char(input, "", 0, false, false, nil, [])
   end
 
-  # TODO: Fix UTF-8 safety - using byte_size instead of String.length due to guard limitations
+  # UTF-8 safe version
   defp quote_unquoted_keys_char_by_char(
          input,
          result,
          pos,
-         _in_string,
-         _escape_next,
-         _quote_char,
+         in_string,
+         escape_next,
+         quote_char,
          repairs
-       )
-       when pos >= byte_size(input) do
-    {result, repairs}
+       ) do
+    if pos >= String.length(input) do
+      {result, repairs}
+    else
+      quote_unquoted_keys_char_by_char_continue(
+        input,
+        result,
+        pos,
+        in_string,
+        escape_next,
+        quote_char,
+        repairs
+      )
+    end
   end
 
-  defp quote_unquoted_keys_char_by_char(
+  defp quote_unquoted_keys_char_by_char_continue(
          input,
          result,
          pos,
@@ -1961,12 +2048,16 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
     end
   end
 
-  # TODO: Fix UTF-8 safety - using byte_size instead of String.length due to guard limitations
-  defp maybe_quote_next_key(input, result, pos, repairs) when pos >= byte_size(input) do
-    {result, pos, repairs}
+  # UTF-8 safe version
+  defp maybe_quote_next_key(input, result, pos, repairs) do
+    if pos >= String.length(input) do
+      {result, pos, repairs}
+    else
+      maybe_quote_next_key_process(input, result, pos, repairs)
+    end
   end
 
-  defp maybe_quote_next_key(input, result, pos, repairs) do
+  defp maybe_quote_next_key_process(input, result, pos, repairs) do
     # Skip whitespace
     {whitespace, new_pos} = consume_whitespace(input, pos)
 
@@ -2009,17 +2100,23 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
   Normalize boolean and null literals.
   """
   @spec normalize_literals(input :: String.t()) :: {String.t(), [repair_action()]}
-  def normalize_literals(input) do
+  def normalize_literals(input) when is_binary(input) do
     normalize_literals_direct(input)
   end
+
+  def normalize_literals(nil), do: {"", []}
+  def normalize_literals(input) when not is_binary(input), do: {inspect(input), []}
 
   @doc """
   Add missing colons in object key-value pairs.
   """
   @spec fix_colons(input :: String.t()) :: {String.t(), [repair_action()]}
-  def fix_colons(input) do
+  def fix_colons(input) when is_binary(input) do
     add_missing_colons(input, [])
   end
+
+  def fix_colons(nil), do: {"", []}
+  def fix_colons(input) when not is_binary(input), do: {inspect(input), []}
 
   @doc """
   Validate that a syntax rule is well-formed.
@@ -2046,7 +2143,8 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
   """
   @spec get_position_info(input :: String.t(), position :: non_neg_integer()) ::
           %{line: pos_integer(), column: pos_integer(), context: String.t()}
-  def get_position_info(input, position) do
+  def get_position_info(input, position)
+      when is_binary(input) and is_integer(position) and position >= 0 do
     lines = String.split(input, "\n")
 
     {line_num, column, _} =
@@ -2071,6 +2169,19 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
       column: column,
       context: context
     }
+  end
+
+  # Handle invalid inputs gracefully
+  def get_position_info(nil, _position) do
+    %{line: 1, column: 1, context: ""}
+  end
+
+  def get_position_info(_input, position) when not is_integer(position) or position < 0 do
+    %{line: 1, column: 1, context: ""}
+  end
+
+  def get_position_info(input, _position) when not is_binary(input) do
+    %{line: 1, column: 1, context: inspect(input)}
   end
 
   # Main normalization function using character-by-character parsing
@@ -2098,28 +2209,26 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
     {colon_processed, all_repairs}
   end
 
-  # Character-by-character parser
-  # TODO: Fix UTF-8 safety - using byte_size instead of String.length due to guard limitations
-  defp parse_characters(content, state) when state.position >= byte_size(content) do
-    state
-  end
-
+  # Character-by-character parser - UTF-8 safe
   defp parse_characters(content, state) do
-    char = String.at(content, state.position)
-    new_state = process_character(char, content, state)
-    parse_characters(content, %{new_state | position: new_state.position + 1})
+    if state.position >= String.length(content) do
+      state
+    else
+      char = String.at(content, state.position)
+      new_state = process_character(char, content, state)
+      parse_characters(content, %{new_state | position: new_state.position + 1})
+    end
   end
 
-  # Character-by-character parser for quotes only
-  # TODO: Fix UTF-8 safety - using byte_size instead of String.length due to guard limitations
-  defp parse_characters_quotes_only(content, state) when state.position >= byte_size(content) do
-    state
-  end
-
+  # Character-by-character parser for quotes only - UTF-8 safe
   defp parse_characters_quotes_only(content, state) do
-    char = String.at(content, state.position)
-    new_state = process_character_quotes_only(char, content, state)
-    parse_characters_quotes_only(content, %{new_state | position: new_state.position + 1})
+    if state.position >= String.length(content) do
+      state
+    else
+      char = String.at(content, state.position)
+      new_state = process_character_quotes_only(char, content, state)
+      parse_characters_quotes_only(content, %{new_state | position: new_state.position + 1})
+    end
   end
 
   # Process characters for quote normalization only
@@ -2416,24 +2525,29 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
   end
 
   defp consume_while_acc(content, current_pos, start_pos, predicate, acc) do
-    char = String.at(content, current_pos)
-
-    if char && predicate.(char) do
-      consume_while_acc(content, current_pos + 1, start_pos, predicate, acc <> char)
-    else
+    # Add bounds checking for UTF-8 safety
+    if current_pos >= String.length(content) do
       {acc, current_pos - start_pos}
+    else
+      char = String.at(content, current_pos)
+
+      if char && predicate.(char) do
+        consume_while_acc(content, current_pos + 1, start_pos, predicate, acc <> char)
+      else
+        {acc, current_pos - start_pos}
+      end
     end
   end
 
   # Post-process to handle comma issues
-  defp post_process_commas(content) do
+  defp post_process_commas(content) when is_binary(content) do
     {without_trailing, trailing_repairs} = remove_trailing_commas(content, [])
     {with_missing, missing_repairs} = add_missing_commas(without_trailing, [])
     {with_missing, trailing_repairs ++ missing_repairs}
   end
 
   # Remove trailing commas
-  defp remove_trailing_commas(content, repairs) do
+  defp remove_trailing_commas(content, repairs) when is_binary(content) do
     remove_trailing_commas_recursive(content, "", false, false, nil, 0, repairs)
   end
 
@@ -2541,7 +2655,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
   end
 
   # Add missing commas (simplified implementation)
-  defp add_missing_commas(content, repairs) do
+  defp add_missing_commas(content, repairs) when is_binary(content) do
     {result, new_repairs} =
       add_missing_commas_recursive(content, "", false, false, nil, 0, repairs, nil, false)
 
@@ -2899,7 +3013,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
   end
 
   # Add missing colons - simplified implementation
-  defp add_missing_colons(content, repairs) do
+  defp add_missing_colons(content, repairs) when is_binary(content) do
     state = %{
       acc: "",
       in_string: false,
@@ -3019,12 +3133,39 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
   end
 
   # Helper functions
-  defp is_identifier_start(char) do
-    (char >= "a" && char <= "z") || (char >= "A" && char <= "Z") || char == "_"
+  defp is_identifier_start(char) when is_binary(char) do
+    # Support ASCII letters, underscore, and UTF-8 characters
+    (char >= "a" && char <= "z") ||
+      (char >= "A" && char <= "Z") ||
+      char == "_" ||
+      is_utf8_letter(char)
   end
 
-  defp is_identifier_char(char) do
+  defp is_identifier_start(_), do: false
+
+  defp is_identifier_char(char) when is_binary(char) do
     is_identifier_start(char) || (char >= "0" && char <= "9") || char == "$"
+  end
+
+  defp is_identifier_char(_), do: false
+
+  # Check if a character is a UTF-8 letter (simplified approach)
+  defp is_utf8_letter(char) when is_binary(char) do
+    # For UTF-8 characters, we'll be permissive and allow any non-ASCII character
+    # that's not a control character or common JSON syntax character
+    byte_size(char) > 1 &&
+      char != "\"" &&
+      char != "'" &&
+      char != "{" &&
+      char != "}" &&
+      char != "[" &&
+      char != "]" &&
+      char != ":" &&
+      char != "," &&
+      char != " " &&
+      char != "\t" &&
+      char != "\n" &&
+      char != "\r"
   end
 
   defp is_number_char(char) do
