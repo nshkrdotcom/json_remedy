@@ -65,8 +65,8 @@ defmodule BasicUsageExamples do
             IO.puts("Validation failed")
         end
 
-      {:continue, output, _} ->
-        IO.puts("Passed through: #{output}")
+      {:error, reason} ->
+        IO.puts("Error: #{reason}")
     end
 
     IO.puts("")
@@ -92,8 +92,8 @@ defmodule BasicUsageExamples do
             IO.puts("Validation failed")
         end
 
-      {:continue, output, _} ->
-        IO.puts("Passed through: #{output}")
+      {:error, reason} ->
+        IO.puts("Error: #{reason}")
     end
 
     IO.puts("")
@@ -119,8 +119,8 @@ defmodule BasicUsageExamples do
             IO.puts("Validation failed")
         end
 
-      {:continue, output, _} ->
-        IO.puts("Passed through: #{output}")
+      {:error, reason} ->
+        IO.puts("Error: #{reason}")
     end
 
     IO.puts("")
@@ -146,8 +146,8 @@ defmodule BasicUsageExamples do
             IO.puts("Validation failed")
         end
 
-      {:continue, output, _} ->
-        IO.puts("Passed through: #{output}")
+      {:error, reason} ->
+        IO.puts("Error: #{reason}")
     end
 
     IO.puts("")
@@ -173,8 +173,8 @@ defmodule BasicUsageExamples do
             IO.puts("Validation failed")
         end
 
-      {:continue, output, _} ->
-        IO.puts("Passed through: #{output}")
+      {:error, reason} ->
+        IO.puts("Error: #{reason}")
     end
 
     IO.puts("")
@@ -195,8 +195,9 @@ defmodule BasicUsageExamples do
       {:ok, repaired, updated_context} ->
         IO.puts("After Layer 2: #{repaired}")
         {repaired, updated_context}
-      {:continue, output, context} ->
-        {output, context}
+      {:error, reason} ->
+        IO.puts("Layer 2 error: #{reason}")
+        {malformed, context}
     end
 
     # Layer 3: Syntax normalization
@@ -204,7 +205,8 @@ defmodule BasicUsageExamples do
       {:ok, repaired, updated_context} ->
         IO.puts("After Layer 3: #{repaired}")
         {repaired, updated_context}
-      {:continue, output, context} ->
+      {:error, reason} ->
+        IO.puts("Layer 3 error: #{reason}")
         {output, context}
     end
 
@@ -213,7 +215,8 @@ defmodule BasicUsageExamples do
       {:ok, parsed, final_context} ->
         IO.puts("Final result: #{inspect(parsed, pretty: true)}")
         IO.puts("Repairs made: #{length(final_context.repairs)}")
-      {:continue, output, _} ->
+      {:error, reason} ->
+        IO.puts("Validation error: #{reason}")
         IO.puts("Final output: #{output}")
     end
 
@@ -243,8 +246,8 @@ defmodule BasicUsageExamples do
             IO.puts("Validation failed")
         end
 
-      {:continue, output, _} ->
-        IO.puts("Passed through: #{output}")
+      {:error, reason} ->
+        IO.puts("Error: #{reason}")
     end
 
     IO.puts("")
@@ -276,21 +279,23 @@ defmodule BasicUsageExamples do
     {output, context} = case ContentCleaning.process(malformed, context) do
       {:ok, repaired, updated_context} ->
         IO.puts("✓ Layer 1 (Content Cleaning):")
-        IO.puts("  #{repaired}")
+        IO.puts("")
+        IO.puts("#{repaired}")
         {repaired, updated_context}
-      {:continue, output, context} ->
-        IO.puts("✗ Layer 1 passed through")
-        {output, context}
+      {:error, reason} ->
+        IO.puts("✗ Layer 1 error: #{reason}")
+        {malformed, context}
     end
 
     # Layer 2: Structural Repair
     {output, context} = case StructuralRepair.process(output, context) do
       {:ok, repaired, updated_context} ->
         IO.puts("✓ Layer 2 (Structural Repair):")
-        IO.puts("  #{repaired}")
+        IO.puts("")
+        IO.puts("#{repaired}")
         {repaired, updated_context}
-      {:continue, output, context} ->
-        IO.puts("✗ Layer 2 passed through")
+      {:error, reason} ->
+        IO.puts("✗ Layer 2 error: #{reason}")
         {output, context}
     end
 
@@ -298,10 +303,11 @@ defmodule BasicUsageExamples do
     {output, context} = case SyntaxNormalization.process(output, context) do
       {:ok, repaired, updated_context} ->
         IO.puts("✓ Layer 3 (Syntax Normalization):")
-        IO.puts("  #{repaired}")
+        IO.puts("")
+        IO.puts("#{repaired}")
         {repaired, updated_context}
-      {:continue, output, context} ->
-        IO.puts("✗ Layer 3 passed through")
+      {:error, reason} ->
+        IO.puts("✗ Layer 3 error: #{reason}")
         {output, context}
     end
 
@@ -320,8 +326,8 @@ defmodule BasicUsageExamples do
             IO.puts("  - #{repair.action}")
           end
         end
-      {:continue, output, _} ->
-        IO.puts("✗ Layer 4: Validation failed")
+      {:error, reason} ->
+        IO.puts("✗ Layer 4: Validation failed - #{reason}")
         IO.puts("Final output: #{output}")
     end
 

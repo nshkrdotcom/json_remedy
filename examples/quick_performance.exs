@@ -50,10 +50,12 @@ defmodule QuickPerformanceExamples do
     end)
 
     case result do
-      {:ok, repaired_json, _context} ->
+      {:ok, repaired_data} ->
+        repaired_json = Jason.encode!(repaired_data)
         IO.puts("✓ Successfully repaired in #{time}μs (#{Float.round(time/1000, 2)}ms)")
         IO.puts("Output size: #{byte_size(repaired_json)} bytes")
-        IO.puts("Throughput: #{Float.round(byte_size(malformed) * 1_000_000 / time / 1024, 2)} KB/s")
+        throughput = if time > 0, do: Float.round(byte_size(malformed) * 1_000_000 / time / 1024, 2), else: "∞"
+        IO.puts("Throughput: #{throughput} KB/s")
       {:error, reason} ->
         IO.puts("✗ Failed: #{reason}")
     end
@@ -104,10 +106,12 @@ defmodule QuickPerformanceExamples do
     end)
 
     case result do
-      {:ok, repaired_json, _context} ->
+      {:ok, repaired_data} ->
+        repaired_json = Jason.encode!(repaired_data)
         IO.puts("✓ Successfully repaired in #{time}μs (#{Float.round(time/1000, 2)}ms)")
         IO.puts("Output size: #{byte_size(repaired_json)} bytes")
-        IO.puts("Throughput: #{Float.round(byte_size(malformed) * 1_000_000 / time / 1024, 2)} KB/s")
+        throughput = if time > 0, do: Float.round(byte_size(malformed) * 1_000_000 / time / 1024, 2), else: "∞"
+        IO.puts("Throughput: #{throughput} KB/s")
       {:error, reason} ->
         IO.puts("✗ Failed: #{reason}")
     end
@@ -135,7 +139,8 @@ defmodule QuickPerformanceExamples do
       end)
 
       IO.puts("  Time: #{time}μs (#{Float.round(time/1000, 2)}ms)")
-      IO.puts("  Throughput: #{Float.round(byte_size(input) * 1_000_000 / time / 1024, 2)} KB/s")
+      throughput = if time > 0, do: Float.round(byte_size(input) * 1_000_000 / time / 1024, 2), else: "∞"
+      IO.puts("  Throughput: #{throughput} KB/s")
     end
 
     IO.puts("")

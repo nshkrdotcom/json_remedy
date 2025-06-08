@@ -160,6 +160,7 @@ defmodule PerformanceBenchmarks do
 
       repair_count = case result do
         {:ok, _, final_context} -> length(final_context.repairs)
+        {:continue, _, final_context} -> length(final_context.repairs)
         _ -> 0
       end
 
@@ -191,19 +192,19 @@ defmodule PerformanceBenchmarks do
     # Layer 1: Content Cleaning
     {output, context} = case ContentCleaning.process(input, context) do
       {:ok, repaired, updated_context} -> {repaired, updated_context}
-      {:continue, output, context} -> {output, context}
+      {:error, _reason} -> {input, context}
     end
 
     # Layer 2: Structural Repair
     {output, context} = case StructuralRepair.process(output, context) do
       {:ok, repaired, updated_context} -> {repaired, updated_context}
-      {:continue, output, context} -> {output, context}
+      {:error, _reason} -> {output, context}
     end
 
     # Layer 3: Syntax Normalization
     {output, context} = case SyntaxNormalization.process(output, context) do
       {:ok, repaired, updated_context} -> {repaired, updated_context}
-      {:continue, output, context} -> {output, context}
+      {:error, _reason} -> {output, context}
     end
 
     # Layer 4: Validation

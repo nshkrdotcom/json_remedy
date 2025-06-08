@@ -356,30 +356,45 @@ export default config;|
     # Layer 1: Content Cleaning
     {output, context} = case ContentCleaning.process(malformed_json, context) do
       {:ok, repaired, updated_context} ->
-        IO.puts("✓ Layer 1 (Content Cleaning): Applied #{length(updated_context.repairs) - length(context.repairs)} repairs")
+        repairs_applied = length(updated_context.repairs) - length(context.repairs)
+        if repairs_applied > 0 do
+          IO.puts("✓ Layer 1 (Content Cleaning): Applied #{repairs_applied} repairs")
+        else
+          IO.puts("- Layer 1 (Content Cleaning): No changes needed")
+        end
         {repaired, updated_context}
-      {:continue, output, context} ->
-        IO.puts("- Layer 1 (Content Cleaning): No changes needed")
-        {output, context}
+      {:error, reason} ->
+        IO.puts("✗ Layer 1 (Content Cleaning): Error - #{reason}")
+        {malformed_json, context}
     end
 
     # Layer 2: Structural Repair
     {output, context} = case StructuralRepair.process(output, context) do
       {:ok, repaired, updated_context} ->
-        IO.puts("✓ Layer 2 (Structural Repair): Applied #{length(updated_context.repairs) - length(context.repairs)} repairs")
+        repairs_applied = length(updated_context.repairs) - length(context.repairs)
+        if repairs_applied > 0 do
+          IO.puts("✓ Layer 2 (Structural Repair): Applied #{repairs_applied} repairs")
+        else
+          IO.puts("- Layer 2 (Structural Repair): No changes needed")
+        end
         {repaired, updated_context}
-      {:continue, output, context} ->
-        IO.puts("- Layer 2 (Structural Repair): No changes needed")
+      {:error, reason} ->
+        IO.puts("✗ Layer 2 (Structural Repair): Error - #{reason}")
         {output, context}
     end
 
     # Layer 3: Syntax Normalization
     {output, context} = case SyntaxNormalization.process(output, context) do
       {:ok, repaired, updated_context} ->
-        IO.puts("✓ Layer 3 (Syntax Normalization): Applied #{length(updated_context.repairs) - length(context.repairs)} repairs")
+        repairs_applied = length(updated_context.repairs) - length(context.repairs)
+        if repairs_applied > 0 do
+          IO.puts("✓ Layer 3 (Syntax Normalization): Applied #{repairs_applied} repairs")
+        else
+          IO.puts("- Layer 3 (Syntax Normalization): No changes needed")
+        end
         {repaired, updated_context}
-      {:continue, output, context} ->
-        IO.puts("- Layer 3 (Syntax Normalization): No changes needed")
+      {:error, reason} ->
+        IO.puts("✗ Layer 3 (Syntax Normalization): Error - #{reason}")
         {output, context}
     end
 
@@ -409,6 +424,11 @@ export default config;|
 
       {:continue, output, _} ->
         IO.puts("✗ Layer 4 (Validation): Could not produce valid JSON")
+        IO.puts("Note: This would normally pass to Layer 5 (Tolerant Parsing) when implemented")
+        IO.puts("Final output: #{String.slice(output, 0, 200)}...")
+        IO.puts("")
+      {:error, reason} ->
+        IO.puts("✗ Layer 4 (Validation): Error occurred - #{reason}")
         IO.puts("Final output: #{String.slice(output, 0, 200)}...")
         IO.puts("")
     end

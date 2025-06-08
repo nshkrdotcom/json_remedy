@@ -7,7 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.0] - 2025-01-07
+## [0.1.1] - 2025-06-07
+
+### Changed
+- **BREAKING: Complete architectural rewrite** - Brand new 5-layer pipeline design
+- **New layered approach**: Regex → State Machine → Character Parsing → Validation → Tolerant Parsing
+- **Improved performance**: Significantly faster with intelligent fast-path optimization
+- **Better reliability**: More robust handling of complex malformed JSON
+- **Enhanced API**: More intuitive function signatures and options
+- **Superior test coverage**: Comprehensive test suite with real-world scenarios
+
+### Added
+- **Layer 1 - Content Cleaning**: Advanced code fence removal, comment stripping, encoding normalization
+- **Layer 2 - Structural Repair**: Sophisticated state machine for delimiter repair and object concatenation
+- **Layer 3 - Syntax Normalization**: Context-aware quote, boolean, and comma normalization  
+- **Layer 4 - Fast Validation**: Jason.decode optimization with early exit for valid JSON
+- **Implementation Status Documentation**: Clear roadmap and current capabilities
+- **Real-world Examples**: Comprehensive examples for LLM output, legacy systems, streaming data
+- **Advanced Benchmarking**: Performance testing suite with memory profiling
+
+### Technical Details
+- **Complete codebase rewrite**: All modules redesigned from ground up
+- **New design patterns**: LayerBehaviour protocol, Context tracking, Pipeline architecture
+- **Enhanced maintainability**: Modular design with clear separation of concerns
+- **Production readiness**: Comprehensive error handling and edge case coverage
+
+### Future
+- **Layer 5 - Tolerant Parsing**: Planned for next major release (aggressive error recovery)
+
+### Note
+This is a **100% rewrite** - all previous code has been replaced with the new layered architecture. While the API maintains compatibility, the internal implementation is entirely new.
+
+## [0.1.0] - 2025-06-06
 
 ### Added
 - Initial release of JsonRemedy
@@ -41,5 +72,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Minimal memory overhead (< 8KB for repairs)
 - All operations pass performance thresholds
 
-[Unreleased]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/nshkrdotcom/json_remedy/releases/tag/v0.1.0

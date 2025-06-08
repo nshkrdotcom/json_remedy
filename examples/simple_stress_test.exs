@@ -40,7 +40,7 @@ defmodule SimpleStressTest do
       end)
     end)
 
-    successes = Enum.count(results, fn result -> match?({:ok, _, _}, result) end)
+    successes = Enum.count(results, fn result -> match?({:ok, _}, result) end)
 
     IO.puts("✓ Completed 1000 operations in #{Float.round(time/1000, 2)}ms")
     IO.puts("✓ Success rate: #{successes}/1000")
@@ -62,7 +62,7 @@ defmodule SimpleStressTest do
     end)
 
     case result do
-      {:ok, _, _} ->
+      {:ok, _} ->
         IO.puts("✓ Successfully repaired nested structure in #{Float.round(time/1000, 2)}ms")
       {:error, reason} ->
         IO.puts("✗ Failed on nested structure: #{reason}")
@@ -85,7 +85,7 @@ defmodule SimpleStressTest do
     end)
 
     case result do
-      {:ok, _, _} ->
+      {:ok, _} ->
         IO.puts("✓ Successfully repaired large array in #{Float.round(time/1000, 2)}ms")
       {:error, reason} ->
         IO.puts("✗ Failed on large array: #{reason}")

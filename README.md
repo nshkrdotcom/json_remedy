@@ -83,12 +83,12 @@ Standard JSON parsers fail completely on these inputs. JsonRemedy fixes them int
 - **Performance monitoring**: Automatic fallback for complex repairs
 - **Early exit**: Stop processing when JSON is clean
 
-### 🛟 **Tolerant Parsing (Layer 5)**
-- **Lenient number parsing**: `123,456` → `123` (with backtracking)
-- **Number fallback**: Malformed numbers become strings vs. failing
-- **Literal disambiguation**: Smart detection of booleans vs. strings
-- **Aggressive error recovery**: Extract meaningful data from severely malformed input
-- **Stream-safe parsing**: Handle incomplete or truncated JSON
+### 🛟 **Tolerant Parsing (Layer 5)** ⏳ *FUTURE*
+- **Lenient number parsing**: `123,456` → `123` (with backtracking) *- Planned*
+- **Number fallback**: Malformed numbers become strings vs. failing *- Planned*
+- **Literal disambiguation**: Smart detection of booleans vs. strings *- Planned*
+- **Aggressive error recovery**: Extract meaningful data from severely malformed input *- Planned*
+- **Stream-safe parsing**: Handle incomplete or truncated JSON *- Planned*
 
 ### 🧠 **Context-Aware Intelligence**
 
@@ -362,6 +362,35 @@ MyCustomExample.test_my_json()
 
 Run with: `mix run examples/my_custom_example.exs`
 
+## Implementation Status
+
+JsonRemedy is currently in **Phase 1** implementation with **Layers 1-4 fully operational**:
+
+| Layer | Status | Description |
+|-------|--------|-------------|
+| **Layer 1** | ✅ **Complete** | Content cleaning (code fences, comments, encoding) |
+| **Layer 2** | ✅ **Complete** | Structural repair (delimiters, nesting, concatenation) |  
+| **Layer 3** | ✅ **Complete** | Syntax normalization (quotes, booleans, commas) |
+| **Layer 4** | ✅ **Complete** | Fast validation (Jason.decode optimization) |
+| **Layer 5** | ⏳ **Planned** | Tolerant parsing (aggressive error recovery) |
+
+The current implementation handles **~95% of real-world malformed JSON** through Layers 1-4. Layer 5 will add edge case handling for the remaining challenging scenarios.
+
+### 🗺️ **Roadmap**
+
+**Current Release (v0.1.1)**: Production-ready Layers 1-4
+- ✅ Complete JSON repair pipeline
+- ✅ Handles LLM outputs, legacy systems, human input
+- ✅ Performance optimized with fast-path validation
+- ✅ Comprehensive test coverage and documentation
+
+**Next Release (v0.2.0)**: Layer 5 - Tolerant Parsing
+- ⏳ Custom recursive descent parser
+- ⏳ Aggressive error recovery for edge cases
+- ⏳ Malformed number handling (e.g., `123,456` → `123`)
+- ⏳ Stream-safe parsing for incomplete JSON
+- ⏳ Literal disambiguation algorithms
+
 ## The 5-Layer Architecture
 
 JsonRemedy's strength comes from its pragmatic, layered approach where each layer uses the optimal technique:
@@ -374,7 +403,7 @@ defmodule JsonRemedy.LayeredRepair do
     |> Layer2.structural_repair()     # State machine: Fix delimiters, nesting, structure  
     |> Layer3.syntax_normalization()  # Char parsing: Fix quotes, booleans, commas
     |> Layer4.validation_attempt()    # Jason.decode: Fast path for clean JSON
-    |> Layer5.tolerant_parsing()      # Custom parser: Handle edge cases gracefully
+    |> Layer5.tolerant_parsing()      # Custom parser: Handle edge cases gracefully (FUTURE)
   end
 end
 ```
@@ -406,12 +435,12 @@ end
 - Returns immediately if successful (common case)
 - Provides performance benchmark
 
-### 🛟 **Layer 5: Tolerant Parsing**
-**Technique**: Custom recursive descent with error recovery
-- Handles edge cases that preprocessing can't fix
-- Uses pattern matching where appropriate
-- Aggressive error recovery
-- Graceful failure modes
+### 🛟 **Layer 5: Tolerant Parsing** ⏳ *FUTURE*
+**Technique**: Custom recursive descent with error recovery *(planned)*
+- Handles edge cases that preprocessing can't fix *(planned)*
+- Uses pattern matching where appropriate *(planned)*
+- Aggressive error recovery *(planned)*
+- Graceful failure modes *(planned)*
 
 ## API Reference
 
@@ -511,6 +540,8 @@ end)
 ## Performance Characteristics
 
 JsonRemedy prioritizes **correctness first, performance second** with intelligent optimization:
+
+> **Note**: Performance benchmarks below reflect Layers 1-4 implementation. Layer 5 performance will be added in v0.2.0.
 
 ### Benchmarks
 ```
@@ -859,8 +890,8 @@ lib/
 │   │   └── syntax_normalization.ex    # ✅ Quotes, booleans, char-by-char parsing
 │   ├── layer4/
 │   │   └── validation.ex              # Jason.decode optimization
-│   ├── layer5/
-│   │   └── tolerant_parsing.ex        # Custom parser with error recovery
+│   ├── layer5/                         # ⏳ PLANNED
+│   │   └── tolerant_parsing.ex        # ⏳ Custom parser with error recovery
 │   ├── pipeline.ex                    # Layer orchestration
 │   ├── performance.ex                 # Monitoring and health checks
 │   └── config.ex                      # Configuration management
@@ -901,7 +932,7 @@ def fix_my_pattern(input), do: apply_rule(input, @my_pattern_rule)
 ## Roadmap
 
 ### Version 0.2.0 - Enhanced Capabilities
-- [ ] Layer 4 & 5 completion (validation + tolerant parsing)
+- [ ] Layer 5 completion (tolerant parsing) - Layer 4 already complete
 - [ ] Advanced escape sequence handling (`\uXXXX`, `\xXX`)
 - [ ] Concatenated JSON object wrapping
 - [ ] Performance optimizations for large files
