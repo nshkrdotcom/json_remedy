@@ -1,7 +1,7 @@
 defmodule JsonRemedy.Layer3.ContextManager do
   @moduledoc """
   Context management functions for Layer 3 syntax normalization.
-  
+
   Handles parsing state, expectation tracking, and context transitions
   during character-by-character processing.
   """
@@ -21,7 +21,7 @@ defmodule JsonRemedy.Layer3.ContextManager do
   @doc """
   Determine what to expect after closing a delimiter.
   """
-  @spec determine_expecting_after_close(list()) :: atom()
+  @spec determine_expecting_after_close(list()) :: :comma_or_end | :value
   def determine_expecting_after_close(stack) do
     case List.first(stack) do
       :object -> :comma_or_end

@@ -1,7 +1,7 @@
 defmodule JsonRemedy.Layer3.BinaryProcessors do
   @moduledoc """
   Binary pattern matching optimization functions for Layer 3 syntax normalization.
-  
+
   Contains optimized binary processing functions that eliminate String.at/2 calls
   for maximum performance.
   """
@@ -36,7 +36,9 @@ defmodule JsonRemedy.Layer3.BinaryProcessors do
           list(),
           atom(),
           non_neg_integer()
-        ) :: {binary(), iolist(), list(), boolean(), boolean(), String.t() | nil, list(), atom(), non_neg_integer()}
+        ) ::
+          {binary(), iolist(), list(), boolean(), boolean(), String.t() | nil, list(), atom(),
+           non_neg_integer()}
   def process_identifier_binary_simple(
         binary,
         result_iolist,
@@ -53,19 +55,43 @@ defmodule JsonRemedy.Layer3.BinaryProcessors do
     {result_addition, new_repairs} =
       case identifier do
         "True" ->
-          repair = SyntaxHelpers.create_repair("normalized boolean", "Normalized boolean True -> true", pos)
+          repair =
+            SyntaxHelpers.create_repair(
+              "normalized boolean",
+              "Normalized boolean True -> true",
+              pos
+            )
+
           {"true", [repair]}
 
         "TRUE" ->
-          repair = SyntaxHelpers.create_repair("normalized boolean", "Normalized boolean TRUE -> true", pos)
+          repair =
+            SyntaxHelpers.create_repair(
+              "normalized boolean",
+              "Normalized boolean TRUE -> true",
+              pos
+            )
+
           {"true", [repair]}
 
         "False" ->
-          repair = SyntaxHelpers.create_repair("normalized boolean", "Normalized boolean False -> false", pos)
+          repair =
+            SyntaxHelpers.create_repair(
+              "normalized boolean",
+              "Normalized boolean False -> false",
+              pos
+            )
+
           {"false", [repair]}
 
         "FALSE" ->
-          repair = SyntaxHelpers.create_repair("normalized boolean", "Normalized boolean FALSE -> false", pos)
+          repair =
+            SyntaxHelpers.create_repair(
+              "normalized boolean",
+              "Normalized boolean FALSE -> false",
+              pos
+            )
+
           {"false", [repair]}
 
         "None" ->
@@ -96,7 +122,8 @@ defmodule JsonRemedy.Layer3.BinaryProcessors do
 
     new_expecting = determine_next_expecting_simple(expecting, stack)
 
-    {remaining, [result_iolist, result_addition], new_repairs ++ repairs, in_string, escape_next, quote, stack, new_expecting, pos + chars_consumed}
+    {remaining, [result_iolist, result_addition], new_repairs ++ repairs, in_string, escape_next,
+     quote, stack, new_expecting, pos + chars_consumed}
   end
 
   @doc """
@@ -112,7 +139,9 @@ defmodule JsonRemedy.Layer3.BinaryProcessors do
           list(),
           atom(),
           non_neg_integer()
-        ) :: {binary(), iolist(), list(), boolean(), boolean(), String.t() | nil, list(), atom(), non_neg_integer()}
+        ) ::
+          {binary(), iolist(), list(), boolean(), boolean(), String.t() | nil, list(), atom(),
+           non_neg_integer()}
   def process_number_binary_simple(
         binary,
         result_iolist,
@@ -128,7 +157,8 @@ defmodule JsonRemedy.Layer3.BinaryProcessors do
 
     new_expecting = determine_next_expecting_simple(expecting, stack)
 
-    {remaining, [result_iolist, number], repairs, in_string, escape_next, quote, stack, new_expecting, pos + chars_consumed}
+    {remaining, [result_iolist, number], repairs, in_string, escape_next, quote, stack,
+     new_expecting, pos + chars_consumed}
   end
 
   @doc """

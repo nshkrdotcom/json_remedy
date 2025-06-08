@@ -1,7 +1,7 @@
 defmodule JsonRemedy.Layer3.SyntaxHelpers do
   @moduledoc """
   Helper functions for Layer 3 syntax normalization operations.
-  
+
   Contains utilities for character recognition, text processing,
   and common operations used across the syntax normalization layer.
   """
@@ -119,7 +119,8 @@ defmodule JsonRemedy.Layer3.SyntaxHelpers do
   @doc """
   Generic consume while predicate is true.
   """
-  @spec consume_while(String.t(), non_neg_integer(), (String.t() -> boolean())) :: {String.t(), non_neg_integer()}
+  @spec consume_while(String.t(), non_neg_integer(), (String.t() -> boolean())) ::
+          {String.t(), non_neg_integer()}
   def consume_while(content, start_pos, predicate) do
     consume_while_acc(content, start_pos, start_pos, predicate, "")
   end
