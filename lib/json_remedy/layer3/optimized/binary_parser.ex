@@ -12,6 +12,7 @@ defmodule JsonRemedy.Layer3.Optimized.BinaryParser do
   @doc """
   Optimized quote_unquoted_keys using binary pattern matching and IO lists.
   """
+  @spec quote_unquoted_keys_optimized(binary()) :: {binary(), [map()]}
   def quote_unquoted_keys_optimized(input) when is_binary(input) do
     {result_iolist, repairs} = quote_keys_binary(input, [], false, false, nil, [])
     {IO.iodata_to_binary(result_iolist), repairs}
@@ -187,6 +188,7 @@ defmodule JsonRemedy.Layer3.Optimized.BinaryParser do
   @doc """
   Optimized normalize_literals using binary pattern matching.
   """
+  @spec normalize_literals_optimized(binary()) :: {binary(), [map()]}
   def normalize_literals_optimized(input) when is_binary(input) do
     {result_iolist, repairs} = normalize_literals_binary(input, [], false, false, nil, [])
     {IO.iodata_to_binary(result_iolist), repairs}

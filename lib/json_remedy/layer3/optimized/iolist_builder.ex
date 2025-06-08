@@ -16,6 +16,7 @@ defmodule JsonRemedy.Layer3.Optimized.IOListBuilder do
 
   This replaces the quadratic `result <> char` pattern with O(1) IO list operations.
   """
+  @spec quote_unquoted_keys_iolist(binary()) :: {binary(), [map()]}
   def quote_unquoted_keys_iolist(input) when is_binary(input) do
     {result_iolist, repairs} =
       quote_unquoted_keys_char_by_char_iolist(input, [], 0, false, false, nil, [])
