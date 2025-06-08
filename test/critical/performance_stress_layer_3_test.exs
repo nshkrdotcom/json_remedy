@@ -210,8 +210,8 @@ defmodule JsonRemedy.Layer3.PerformanceStressTest do
       assert time < 15_000, "Boolean variants processing took #{time}μs, expected < 15ms"
 
       # Should normalize all variants
-      assert String.contains?(result, "\"key1\": true")
-      assert String.contains?(result, "\"key100\":")
+      assert String.contains?(result, "\"key1\": false")
+      assert String.contains?(result, "\"key100\": true")
       # No Python booleans
       refute String.contains?(result, "True")
       # No Python null

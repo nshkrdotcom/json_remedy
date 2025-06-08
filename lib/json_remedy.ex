@@ -23,7 +23,10 @@ defmodule JsonRemedy do
       {:ok, "[1,2,3]"}
 
       iex> JsonRemedy.repair(~s|{incomplete: "data"|, logging: true)
-      {:ok, %{"incomplete" => "data"}, [%{layer: :layer2, action: "added missing closing brace"}]}
+      {:ok, %{"incomplete" => "data"}, [
+        %{layer: :structural_repair, action: "added missing closing brace", position: 18, original: nil, replacement: "}"},
+        %{layer: :syntax_normalization, action: "quoted unquoted key", position: 1, original: nil, replacement: nil}
+      ]}
   """
 
   alias JsonRemedy.Layer1.ContentCleaning
@@ -39,6 +42,7 @@ defmodule JsonRemedy do
   @type repair_result_with_logs :: {:ok, json_value(), [repair_action()]} | {:error, String.t()}
   @type option ::
           {:logging, boolean()}
+          | {:debug, boolean()}
           | {:jason_options, keyword()}
           | {:fast_path_optimization, boolean()}
 
@@ -51,6 +55,7 @@ defmodule JsonRemedy do
   ## Options
 
   - `logging: true` - Returns repair actions taken as third element in tuple
+  - `debug: true` - Returns detailed step-by-step debugging information
   - `jason_options: []` - Options to pass to Jason for final parsing
   - `fast_path_optimization: true` - Enable fast path for already valid JSON (default)
 
@@ -63,7 +68,7 @@ defmodule JsonRemedy do
       {:ok, %{"name" => "John", "age" => 30, "active" => true}}
 
       iex> JsonRemedy.repair(~s|[1, 2, 3,]|, logging: true)
-      {:ok, [1, 2, 3], [%{layer: :layer3, action: "removed trailing comma"}]}
+      {:ok, [1, 2, 3], [%{layer: :syntax_normalization, action: "removed trailing comma", position: 8, original: nil, replacement: nil}]}
 
       iex> JsonRemedy.repair(~s/```json\\n{"valid": true}\\n```/)
       {:ok, %{"valid" => true}}
@@ -71,32 +76,38 @@ defmodule JsonRemedy do
   @spec repair(binary(), [option()]) :: repair_result() | repair_result_with_logs()
   def repair(json_string, opts \\ []) when is_binary(json_string) do
     logging = Keyword.get(opts, :logging, false)
+    debug = Keyword.get(opts, :debug, false)
     jason_options = Keyword.get(opts, :jason_options, [])
     fast_path = Keyword.get(opts, :fast_path_optimization, true)
 
-    # Initialize context
-    context = %{
-      repairs: [],
-      options: [
-        jason_options: jason_options,
-        fast_path_optimization: fast_path
-      ],
-      metadata: %{}
-    }
-
-    # Try fast path first if enabled
-    if fast_path do
-      case Jason.decode(json_string, jason_options) do
-        {:ok, result} ->
-          if logging, do: {:ok, result, []}, else: {:ok, result}
-
-        {:error, _} ->
-          # Fast path failed, use full pipeline
-          process_through_pipeline(json_string, context, logging)
-      end
+    # If debug is requested, use the debug function
+    if debug do
+      repair_with_debug(json_string, opts)
     else
-      # Skip fast path, use full pipeline
-      process_through_pipeline(json_string, context, logging)
+      # Initialize context
+      context = %{
+        repairs: [],
+        options: [
+          jason_options: jason_options,
+          fast_path_optimization: fast_path
+        ],
+        metadata: %{}
+      }
+
+      # Try fast path first if enabled
+      if fast_path do
+        case Jason.decode(json_string, jason_options) do
+          {:ok, result} ->
+            if logging, do: {:ok, result, []}, else: {:ok, result}
+
+          {:error, _} ->
+            # Fast path failed, use full pipeline
+            process_through_pipeline(json_string, context, logging)
+        end
+      else
+        # Skip fast path, use full pipeline
+        process_through_pipeline(json_string, context, logging)
+      end
     end
   end
 
@@ -142,8 +153,8 @@ defmodule JsonRemedy do
       iex> JsonRemedy.from_file("config.json")
       {:ok, %{"setting" => "value"}}
 
-      iex> JsonRemedy.from_file("malformed.json", logging: true)
-      {:ok, %{"data" => "value"}, [%{layer: :layer1, action: "removed code fences"}]}
+      iex> JsonRemedy.from_file("nonexistent.json", logging: true)
+      {:error, "Could not read file: :enoent"}
   """
   @spec from_file(Path.t(), [option()]) :: repair_result() | repair_result_with_logs()
   def from_file(path, opts \\ []) do
@@ -215,8 +226,10 @@ defmodule JsonRemedy do
 
       iex> JsonRemedy.analyze(~s|{name: 'Alice', active: True}|)
       {:ok, [
-        %{layer: :layer3, action: "normalize single quotes to double quotes"},
-        %{layer: :layer3, action: "normalize Python-style boolean True to true"}
+        %{layer: :syntax_normalization, action: "normalized boolean", position: 24, original: nil, replacement: nil},
+        %{layer: :syntax_normalization, action: "quoted unquoted key", position: 16, original: nil, replacement: nil},
+        %{layer: :syntax_normalization, action: "normalized quotes", position: 7, original: nil, replacement: nil},
+        %{layer: :syntax_normalization, action: "quoted unquoted key", position: 1, original: nil, replacement: nil}
       ]}
   """
   @spec analyze(binary()) :: {:ok, [repair_action()]} | {:error, String.t()}
@@ -228,6 +241,81 @@ defmodule JsonRemedy do
       {:ok, _, repairs} -> {:ok, repairs}
       {:error, reason} -> {:error, reason}
     end
+  end
+
+  @doc """
+  Repairs malformed JSON with detailed debugging information.
+
+  Returns comprehensive information about each step of the repair process,
+  including what each layer attempted to do and why it succeeded or failed.
+
+  ## Examples
+
+      iex> {:ok, result, debug} = JsonRemedy.repair_with_debug(~s|{name: 'Alice', active: True}|)
+      iex> result
+      %{"name" => "Alice", "active" => true}
+      iex> debug.total_repairs
+      4
+      iex> length(debug.steps)
+      4
+  """
+  @spec repair_with_debug(binary(), [option()]) ::
+          {:ok, json_value(),
+           %{
+             steps: [map()],
+             total_repairs: non_neg_integer(),
+             processing_time_us: non_neg_integer()
+           }}
+          | {:error, String.t(),
+             %{
+               steps: [map()],
+               total_repairs: non_neg_integer(),
+               processing_time_us: non_neg_integer()
+             }}
+  def repair_with_debug(json_string, opts \\ []) when is_binary(json_string) do
+    start_time = System.monotonic_time(:microsecond)
+    jason_options = Keyword.get(opts, :jason_options, [])
+    fast_path = Keyword.get(opts, :fast_path_optimization, true)
+
+    # Initialize context with debug tracking
+    context = %{
+      repairs: [],
+      options: [
+        jason_options: jason_options,
+        fast_path_optimization: fast_path,
+        debug: true
+      ],
+      metadata: %{},
+      debug_steps: []
+    }
+
+    # Try fast path first if enabled
+    result =
+      if fast_path do
+        case Jason.decode(json_string, jason_options) do
+          {:ok, result} ->
+            end_time = System.monotonic_time(:microsecond)
+
+            debug_info = %{
+              steps: [
+                %{layer: :fast_path, status: :validated, input_size: byte_size(json_string)}
+              ],
+              total_repairs: 0,
+              processing_time_us: end_time - start_time
+            }
+
+            {:ok, result, debug_info}
+
+          {:error, _} ->
+            # Fast path failed, use full pipeline with debug
+            process_through_pipeline_with_debug(json_string, context, start_time)
+        end
+      else
+        # Skip fast path, use full pipeline with debug
+        process_through_pipeline_with_debug(json_string, context, start_time)
+      end
+
+    result
   end
 
   # Private implementation functions
@@ -252,6 +340,194 @@ defmodule JsonRemedy do
 
       {:error, reason} ->
         {:error, reason}
+    end
+  end
+
+  @spec process_through_pipeline_with_debug(
+          binary(),
+          %{debug_steps: list(), metadata: map(), options: list(), repairs: list()},
+          integer()
+        ) ::
+          {:ok, json_value(),
+           %{processing_time_us: integer(), steps: [map()], total_repairs: non_neg_integer()}}
+          | {:error, binary(),
+             %{
+               error_at_layer: atom(),
+               processing_time_us: integer(),
+               steps: [map()],
+               total_repairs: non_neg_integer()
+             }}
+  defp process_through_pipeline_with_debug(input, context, start_time) do
+    debug_steps = []
+
+    # Layer 1: Content Cleaning
+    case process_layer_with_debug(ContentCleaning, input, context, debug_steps, :layer1) do
+      {{:error, reason}, context1, debug_steps} ->
+        end_time = System.monotonic_time(:microsecond)
+
+        debug_info = %{
+          steps: debug_steps,
+          total_repairs: length(context1.repairs),
+          processing_time_us: end_time - start_time,
+          error_at_layer: :layer1
+        }
+
+        {:error, reason, debug_info}
+
+      {output1, context1, debug_steps} ->
+        # Layer 2: Structural Repair
+        case process_layer_with_debug(StructuralRepair, output1, context1, debug_steps, :layer2) do
+          {{:error, reason}, context2, debug_steps} ->
+            end_time = System.monotonic_time(:microsecond)
+
+            debug_info = %{
+              steps: debug_steps,
+              total_repairs: length(context2.repairs),
+              processing_time_us: end_time - start_time,
+              error_at_layer: :layer2
+            }
+
+            {:error, reason, debug_info}
+
+          {output2, context2, debug_steps} ->
+            # Layer 3: Syntax Normalization
+            case process_layer_with_debug(
+                   SyntaxNormalization,
+                   output2,
+                   context2,
+                   debug_steps,
+                   :layer3
+                 ) do
+              {{:error, reason}, context3, debug_steps} ->
+                end_time = System.monotonic_time(:microsecond)
+
+                debug_info = %{
+                  steps: debug_steps,
+                  total_repairs: length(context3.repairs),
+                  processing_time_us: end_time - start_time,
+                  error_at_layer: :layer3
+                }
+
+                {:error, reason, debug_info}
+
+              {output3, context3, debug_steps} ->
+                # Layer 4: Validation
+                case process_layer_with_debug(Validation, output3, context3, debug_steps, :layer4) do
+                  {{:error, reason}, final_context, debug_steps} ->
+                    end_time = System.monotonic_time(:microsecond)
+
+                    debug_info = %{
+                      steps: debug_steps,
+                      total_repairs: length(final_context.repairs),
+                      processing_time_us: end_time - start_time,
+                      error_at_layer: :layer4
+                    }
+
+                    {:error, reason, debug_info}
+
+                  {output4, final_context, debug_steps} ->
+                    # Check the last step to see if validation succeeded or was skipped
+                    last_step = List.last(debug_steps)
+                    end_time = System.monotonic_time(:microsecond)
+
+                    debug_info = %{
+                      steps: debug_steps,
+                      total_repairs: length(final_context.repairs),
+                      processing_time_us: end_time - start_time
+                    }
+
+                    case last_step.status do
+                      :processed ->
+                        # Layer 4 processed and validated successfully, output4 is parsed JSON
+                        {:ok, output4, debug_info}
+
+                      :skipped ->
+                        # Layer 4 skipped, meaning validation failed, but let's add some debug info
+                        debug_info_with_error =
+                          Map.merge(debug_info, %{
+                            error_at_layer: :layer4,
+                            final_json_string:
+                              if(is_binary(output4),
+                                do: String.slice(output4, 0, 500) <> "...",
+                                else: inspect(output4)
+                              ),
+                            json_validation_error: "Jason.decode failed on the repaired JSON"
+                          })
+
+                        {:error,
+                         "Could not repair JSON - all layers processed but validation failed",
+                         debug_info_with_error}
+
+                      _ ->
+                        {:error, "Unexpected layer 4 status: #{last_step.status}",
+                         Map.put(debug_info, :error_at_layer, :layer4)}
+                    end
+                end
+            end
+        end
+    end
+  end
+
+  @spec process_layer_with_debug(atom(), binary(), map(), list(), atom()) ::
+          {binary() | json_value(), map(), list(map())}
+          | {{:error, String.t()}, map(), list(map())}
+  defp process_layer_with_debug(layer_module, input, context, debug_steps, layer_name) do
+    layer_start_time = System.monotonic_time(:microsecond)
+    input_size = if is_binary(input), do: byte_size(input), else: 0
+    repairs_before = length(context.repairs)
+
+    # Remove debug-specific fields from context before passing to layer
+    clean_context = Map.drop(context, [:debug_steps])
+    result = layer_module.process(input, clean_context)
+
+    layer_end_time = System.monotonic_time(:microsecond)
+    layer_time = layer_end_time - layer_start_time
+
+    case result do
+      {:ok, output, new_context} ->
+        output_size = if is_binary(output), do: byte_size(output), else: 0
+        repairs_after = length(new_context.repairs)
+        new_repairs = Enum.drop(new_context.repairs, repairs_before)
+
+        step_info = %{
+          layer: layer_name,
+          status: :processed,
+          input_size: input_size,
+          output_size: output_size,
+          repairs: new_repairs,
+          repair_count: repairs_after - repairs_before,
+          processing_time_us: layer_time
+        }
+
+        {output, new_context, debug_steps ++ [step_info]}
+
+      {:continue, output, new_context} ->
+        output_size = if is_binary(output), do: byte_size(output), else: 0
+        repairs_after = length(new_context.repairs)
+        new_repairs = Enum.drop(new_context.repairs, repairs_before)
+
+        step_info = %{
+          layer: layer_name,
+          status: :skipped,
+          input_size: input_size,
+          output_size: output_size,
+          repairs: new_repairs,
+          repair_count: repairs_after - repairs_before,
+          processing_time_us: layer_time
+        }
+
+        {output, new_context, debug_steps ++ [step_info]}
+
+      {:error, reason} ->
+        step_info = %{
+          layer: layer_name,
+          status: :error,
+          input_size: input_size,
+          error: reason,
+          processing_time_us: layer_time
+        }
+
+        {{:error, reason}, context, debug_steps ++ [step_info]}
     end
   end
 end

@@ -116,6 +116,24 @@ defmodule JsonRemedy.Layer3.BinaryProcessors do
 
           {"\"" <> identifier <> "\"", [repair]}
 
+        _ when expecting == :value ->
+          # For unquoted string values, we need to check if this is actually a multi-word value
+          # Only quote if it's not a known boolean/null that we missed
+          if identifier in ["true", "false", "null"] do
+            # These are already valid JSON literals, don't quote them
+            {identifier, []}
+          else
+            # This might be an unquoted string value - quote it
+            repair =
+              SyntaxHelpers.create_repair(
+                "quoted unquoted string value",
+                "Added quotes around unquoted string value '#{identifier}'",
+                pos
+              )
+
+            {"\"" <> identifier <> "\"", [repair]}
+          end
+
         _ ->
           {identifier, []}
       end
@@ -193,5 +211,92 @@ defmodule JsonRemedy.Layer3.BinaryProcessors do
 
   defp consume_number_binary_simple(remaining, acc, count) do
     {acc, remaining, count}
+  end
+
+  @doc """
+  Consume an unquoted value until the next JSON delimiter.
+  This handles unquoted string values that may contain spaces.
+  """
+  @spec consume_unquoted_value_binary_simple(binary(), binary(), non_neg_integer()) ::
+          {String.t(), binary(), non_neg_integer()}
+  def consume_unquoted_value_binary_simple(binary, acc \\ <<>>, count \\ 0)
+
+  def consume_unquoted_value_binary_simple(<<char::utf8, rest::binary>>, acc, count)
+      when char in [?,, ?}, ?], ?\n, ?\r] do
+    # Stop at JSON delimiters or newlines
+    {acc, <<char::utf8, rest::binary>>, count}
+  end
+
+  def consume_unquoted_value_binary_simple(<<char::utf8, rest::binary>>, acc, count) do
+    # Continue consuming until we hit a delimiter, including spaces
+    consume_unquoted_value_binary_simple(rest, <<acc::binary, char::utf8>>, count + 1)
+  end
+
+  def consume_unquoted_value_binary_simple(<<>>, acc, count) do
+    # End of input
+    {acc, <<>>, count}
+  end
+
+  @doc """
+  Check if there's more content after an identifier that should be part of an unquoted value.
+  This handles cases like "Weiss Savage" where there are spaces between words.
+  """
+  @spec check_for_multi_word_value(binary(), String.t()) ::
+          {String.t(), binary(), non_neg_integer()}
+  def check_for_multi_word_value(remaining_binary, initial_word) do
+    # First, consume the full identifier from the initial word
+    {full_identifier, after_identifier, identifier_chars} =
+      consume_identifier_binary_simple(<<initial_word::binary, remaining_binary::binary>>)
+
+    # Check if this is a known boolean/null value that should NOT be quoted
+    if full_identifier in [
+         "True",
+         "TRUE",
+         "False",
+         "FALSE",
+         "None",
+         "NULL",
+         "Null",
+         "true",
+         "false",
+         "null"
+       ] do
+      # This is a boolean/null that should be normalized, not quoted as string
+      {initial_word, remaining_binary, 0}
+    else
+      # Look ahead to see if there are more words that should be part of this value
+      case consume_until_delimiter(
+             after_identifier,
+             full_identifier,
+             identifier_chars - byte_size(initial_word)
+           ) do
+        {full_value, remaining, extra_chars} when full_value != full_identifier ->
+          # Found additional content (spaces + more words), return the full value
+          {String.trim(full_value), remaining, extra_chars}
+
+        _ ->
+          # No additional content beyond the identifier
+          {full_identifier, after_identifier, identifier_chars - byte_size(initial_word)}
+      end
+    end
+  end
+
+  # Helper function to consume until a JSON delimiter
+  @spec consume_until_delimiter(binary(), String.t(), non_neg_integer()) ::
+          {String.t(), binary(), non_neg_integer()}
+  defp consume_until_delimiter(<<char::utf8, rest::binary>>, acc, count)
+       when char in [?,, ?}, ?], ?\n, ?\r] do
+    # Stop at JSON delimiters
+    {acc, <<char::utf8, rest::binary>>, count}
+  end
+
+  defp consume_until_delimiter(<<char::utf8, rest::binary>>, acc, count) do
+    # Continue consuming, including spaces and other characters
+    consume_until_delimiter(rest, acc <> <<char::utf8>>, count + 1)
+  end
+
+  defp consume_until_delimiter(<<>>, acc, count) do
+    # End of input
+    {acc, <<>>, count}
   end
 end
