@@ -68,10 +68,7 @@ defmodule JsonRemedy.Context.JsonContext do
   """
   @spec push_context(t(), context_value()) :: t()
   def push_context(%__MODULE__{} = context, new_context) do
-    %{context |
-      current: new_context,
-      stack: [context.current | context.stack]
-    }
+    %{context | current: new_context, stack: [context.current | context.stack]}
   end
 
   @doc """
@@ -95,10 +92,7 @@ defmodule JsonRemedy.Context.JsonContext do
   end
 
   def pop_context(%__MODULE__{stack: [head | tail]} = context) do
-    %{context |
-      current: head,
-      stack: tail
-    }
+    %{context | current: head, stack: tail}
   end
 
   @doc """
@@ -116,10 +110,7 @@ defmodule JsonRemedy.Context.JsonContext do
   """
   @spec enter_string(t(), String.t()) :: t()
   def enter_string(%__MODULE__{} = context, delimiter) do
-    %{context |
-      in_string: true,
-      string_delimiter: delimiter
-    }
+    %{context | in_string: true, string_delimiter: delimiter}
   end
 
   @doc """
@@ -137,10 +128,7 @@ defmodule JsonRemedy.Context.JsonContext do
   """
   @spec exit_string(t()) :: t()
   def exit_string(%__MODULE__{} = context) do
-    %{context |
-      in_string: false,
-      string_delimiter: nil
-    }
+    %{context | in_string: false, string_delimiter: nil}
   end
 
   @doc """

@@ -128,11 +128,11 @@ defmodule JsonRemedy.Context.ContextValuesTest do
     test "returns higher priority for context-specific repairs" do
       # Object key context prioritizes key repairs
       assert ContextValues.get_repair_priority(:object_key, :unquoted_keys) >
-             ContextValues.get_repair_priority(:object_key, :boolean_normalization)
+               ContextValues.get_repair_priority(:object_key, :boolean_normalization)
 
       # Object value context prioritizes value repairs
       assert ContextValues.get_repair_priority(:object_value, :boolean_normalization) >
-             ContextValues.get_repair_priority(:object_value, :unquoted_keys)
+               ContextValues.get_repair_priority(:object_value, :unquoted_keys)
     end
 
     test "returns base priority for unknown repairs" do

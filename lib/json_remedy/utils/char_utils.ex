@@ -79,7 +79,8 @@ defmodule JsonRemedy.Utils.CharUtils do
       nil
   """
   @spec get_char_at(String.t() | nil, position(), any()) :: any()
-  def get_char_at(input, position, default) when is_binary(input) and is_integer(position) and position >= 0 do
+  def get_char_at(input, position, default)
+      when is_binary(input) and is_integer(position) and position >= 0 do
     case String.at(input, position) do
       nil -> default
       char -> char
@@ -125,7 +126,8 @@ defmodule JsonRemedy.Utils.CharUtils do
   """
   @spec skip_to_character(String.t() | nil, String.t() | nil, position()) :: search_result()
   def skip_to_character(input, target_char, start_pos)
-      when is_binary(input) and is_binary(target_char) and is_integer(start_pos) and start_pos >= 0 do
+      when is_binary(input) and is_binary(target_char) and is_integer(start_pos) and
+             start_pos >= 0 do
     input_length = String.length(input)
 
     if start_pos >= input_length do
@@ -174,15 +176,18 @@ defmodule JsonRemedy.Utils.CharUtils do
   """
   @spec skip_whitespaces_at(String.t() | nil, position(), position()) :: position()
   def skip_whitespaces_at(input, start_pos, end_pos)
-      when is_binary(input) and is_integer(start_pos) and is_integer(end_pos)
-      and start_pos >= 0 and end_pos >= 0 do
+      when is_binary(input) and is_integer(start_pos) and is_integer(end_pos) and
+             start_pos >= 0 and end_pos >= 0 do
     input_length = String.length(input)
     actual_end = min(end_pos, input_length)
 
     skip_whitespace_loop(input, start_pos, actual_end)
   end
 
-  def skip_whitespaces_at(_input, start_pos, _end_pos) when is_integer(start_pos) and start_pos >= 0, do: start_pos
+  def skip_whitespaces_at(_input, start_pos, _end_pos)
+      when is_integer(start_pos) and start_pos >= 0,
+      do: start_pos
+
   def skip_whitespaces_at(_input, _start_pos, _end_pos), do: 0
 
   @doc """
@@ -265,7 +270,8 @@ defmodule JsonRemedy.Utils.CharUtils do
       nil
   """
   @spec char_at_position_safe(String.t() | nil, position()) :: char_result()
-  def char_at_position_safe(input, position) when is_binary(input) and is_integer(position) and position >= 0 do
+  def char_at_position_safe(input, position)
+      when is_binary(input) and is_integer(position) and position >= 0 do
     String.at(input, position)
   end
 
@@ -273,8 +279,10 @@ defmodule JsonRemedy.Utils.CharUtils do
 
   # Private helper functions
 
-  @spec find_character_from_position(String.t(), String.t(), position(), position()) :: search_result()
-  defp find_character_from_position(input, target_char, pos, input_length) when pos < input_length do
+  @spec find_character_from_position(String.t(), String.t(), position(), position()) ::
+          search_result()
+  defp find_character_from_position(input, target_char, pos, input_length)
+       when pos < input_length do
     case String.at(input, pos) do
       ^target_char -> pos
       _ -> find_character_from_position(input, target_char, pos + 1, input_length)
@@ -288,6 +296,7 @@ defmodule JsonRemedy.Utils.CharUtils do
     case String.at(input, pos) do
       char when char in [" ", "\t", "\n", "\r", "\f", "\v"] ->
         skip_whitespace_loop(input, pos + 1, end_pos)
+
       _ ->
         pos
     end

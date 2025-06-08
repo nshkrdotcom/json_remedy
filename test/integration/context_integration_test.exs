@@ -27,7 +27,8 @@ defmodule JsonRemedy.Integration.ContextIntegrationTest do
     end
 
     test "string context handling" do
-      context = JsonContext.new()
+      context =
+        JsonContext.new()
         |> JsonContext.push_context(:object_value)
         |> JsonContext.update_position(5)
         |> JsonContext.enter_string("\"")
@@ -108,7 +109,8 @@ defmodule JsonRemedy.Integration.ContextIntegrationTest do
     end
 
     test "context system complements existing string detection" do
-      context = JsonContext.new()
+      context =
+        JsonContext.new()
         |> JsonContext.enter_string("\"")
 
       # Both should agree when in string
@@ -122,18 +124,20 @@ defmodule JsonRemedy.Integration.ContextIntegrationTest do
       context = JsonContext.new()
 
       # Build deep nesting
-      context = Enum.reduce(1..10, context, fn _i, acc ->
-        acc
-        |> JsonContext.push_context(:object_key)
-        |> JsonContext.push_context(:array)
-      end)
+      context =
+        Enum.reduce(1..10, context, fn _i, acc ->
+          acc
+          |> JsonContext.push_context(:object_key)
+          |> JsonContext.push_context(:array)
+        end)
 
       assert JsonContext.context_stack_depth(context) == 20
 
       # Unwind it
-      context = Enum.reduce(1..20, context, fn _i, acc ->
-        JsonContext.pop_context(acc)
-      end)
+      context =
+        Enum.reduce(1..20, context, fn _i, acc ->
+          JsonContext.pop_context(acc)
+        end)
 
       assert context.current == :root
       assert JsonContext.context_stack_depth(context) == 0
@@ -157,8 +161,10 @@ defmodule JsonRemedy.Integration.ContextIntegrationTest do
   describe "real-world scenarios" do
     test "object parsing context flow" do
       # Simulate parsing: {"key": "value", "key2": 42}
-      context = JsonContext.new()
-        |> JsonContext.push_context(:object_key)    # {
+      context =
+        JsonContext.new()
+        # {
+        |> JsonContext.push_context(:object_key)
         |> JsonContext.update_position(1)
 
       # At key position
@@ -177,7 +183,8 @@ defmodule JsonRemedy.Integration.ContextIntegrationTest do
 
     test "array parsing context flow" do
       # Simulate parsing: [1, "string", true]
-      context = JsonContext.new()
+      context =
+        JsonContext.new()
         |> JsonContext.push_context(:array)
         |> JsonContext.update_position(1)
 

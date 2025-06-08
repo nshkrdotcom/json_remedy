@@ -85,9 +85,11 @@ defmodule JsonRemedy.Utils.CharUtilsTest do
 
     test "skips different types of whitespace" do
       whitespace_string = " \t\n\r  test"
-      expected_position = 6  # After all whitespace
+      # After all whitespace
+      expected_position = 6
 
-      assert CharUtils.skip_whitespaces_at(whitespace_string, 0, String.length(whitespace_string)) == expected_position
+      assert CharUtils.skip_whitespaces_at(whitespace_string, 0, String.length(whitespace_string)) ==
+               expected_position
     end
 
     test "respects end position limit" do
@@ -96,8 +98,11 @@ defmodule JsonRemedy.Utils.CharUtilsTest do
     end
 
     test "handles starting from non-zero position" do
-      assert CharUtils.skip_whitespaces_at("hello   world", 5, String.length("hello   world")) == 8
-      assert CharUtils.skip_whitespaces_at("test  \t\n  end", 4, String.length("test  \t\n  end")) == 10
+      assert CharUtils.skip_whitespaces_at("hello   world", 5, String.length("hello   world")) ==
+               8
+
+      assert CharUtils.skip_whitespaces_at("test  \t\n  end", 4, String.length("test  \t\n  end")) ==
+               10
     end
 
     test "returns same position when no whitespace" do
@@ -108,7 +113,8 @@ defmodule JsonRemedy.Utils.CharUtilsTest do
     test "handles edge cases" do
       assert CharUtils.skip_whitespaces_at("", 0, 0) == 0
       assert CharUtils.skip_whitespaces_at("   ", 0, 3) == 3
-      assert CharUtils.skip_whitespaces_at("hello", 10, 15) == 10  # Out of bounds
+      # Out of bounds
+      assert CharUtils.skip_whitespaces_at("hello", 10, 15) == 10
     end
 
     test "works with UTF-8 whitespace and content" do

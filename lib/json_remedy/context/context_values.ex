@@ -59,24 +59,20 @@ defmodule JsonRemedy.Context.ContextValues do
       # Invalid contexts
       {from, _to} when from not in @valid_contexts -> false
       {_from, to} when to not in @valid_contexts -> false
-
       # Valid transitions from root
       {:root, :object_key} -> true
       {:root, :array} -> true
       {:root, _} -> false
-
       # Valid transitions from object_key
       {:object_key, :object_value} -> true
       {:object_key, :object_key} -> true
       {:object_key, :array} -> true
       {:object_key, _} -> false
-
       # Valid transitions from object_value
       {:object_value, :object_key} -> true
       {:object_value, :object_value} -> true
       {:object_value, :array} -> true
       {:object_value, _} -> false
-
       # Valid transitions from array
       {:array, :object_key} -> true
       {:array, :array} -> true
@@ -136,7 +132,13 @@ defmodule JsonRemedy.Context.ContextValues do
   end
 
   def context_allows_repair?(:array, repair_type) do
-    repair_type in [:comma_fix, :bracket_fix, :boolean_normalization, :null_normalization, :quote_normalization]
+    repair_type in [
+      :comma_fix,
+      :bracket_fix,
+      :boolean_normalization,
+      :null_normalization,
+      :quote_normalization
+    ]
   end
 
   def context_allows_repair?(:root, repair_type) do
