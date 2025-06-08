@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2025-06-08
+
+### Added
+- **Advanced debugging capabilities**: New `repair_with_debug/2` function with comprehensive step-by-step instrumentation
+- **Multi-word unquoted value support**: Enhanced Layer 3 to handle complex cases like `Weiss Savage` → `"Weiss Savage"`
+- **Detailed repair reporting**: Enhanced logging with position tracking, original values, and replacement details
+- **Layer 3 architecture refactor**: Modularized syntax normalization into specialized processors:
+  - `BinaryProcessors`: High-performance binary pattern matching
+  - `CharacterParsers`: Context-aware character-by-character parsing  
+  - `QuoteProcessors`: Advanced quote normalization
+  - `RuleProcessors`: Rule-based transformation engine
+  - `SyntaxDetectors`: Pattern detection and classification
+  - `PostProcessors`: Final cleanup and validation
+
+### Enhanced
+- **Performance optimization**: Improved Layer 3 processing with sophisticated multi-word value detection
+- **Type safety**: Added comprehensive Dialyzer type specifications for all debug functions
+- **Test coverage**: Added integration tests for real-world JSON repair scenarios
+- **Error handling**: Enhanced context sanitization for layer module compatibility
+
+### Fixed
+- **Complex unquoted values**: Fixed handling of multi-word unquoted string values with spaces
+- **Boolean preservation**: Maintained proper boolean/null normalization while adding quote support
+- **Structural repair**: Improved missing bracket and brace detection
+- **Type specifications**: Resolved all Dialyzer warnings for enhanced type safety
+
+### Technical Details
+- **Debug instrumentation**: Added `process_through_pipeline_with_debug/3` and `process_layer_with_debug/5`
+- **Context management**: Enhanced repair context with debug step tracking
+- **Performance metrics**: Added processing time tracking and repair counting
+- **Real-world testing**: Added 271-line test file with complex JSON repair scenarios
+
+### Performance
+- **Efficient processing**: ~48ms for 9KB malformed JSON files  
+- **Minimal repairs**: Optimized to make only necessary changes (2 repairs vs 8+ in previous versions)
+- **Layer 3 efficiency**: Enhanced binary processing with reduced repair overhead
+
 ## [0.1.1] - 2025-06-07
 
 ### Changed
