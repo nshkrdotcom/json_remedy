@@ -39,7 +39,13 @@ defmodule JsonRemedy.Context.JsonContext do
       false
 
   """
-  @spec new() :: t()
+  @spec new() :: %__MODULE__{
+          current: :root,
+          stack: [],
+          position: 0,
+          in_string: false,
+          string_delimiter: nil
+        }
   def new do
     %__MODULE__{}
   end

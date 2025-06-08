@@ -27,8 +27,8 @@ defmodule JsonRemedy.Utils.CharUtilsTest do
       assert CharUtils.get_char_at(utf8_string, 0, nil) == "c"
       assert CharUtils.get_char_at(utf8_string, 3, nil) == "é"
       assert CharUtils.get_char_at(utf8_string, 5, nil) == "r"
-      assert CharUtils.get_char_at(utf8_string, 11, nil) == "東"
-      assert CharUtils.get_char_at(utf8_string, 12, nil) == "京"
+      assert CharUtils.get_char_at(utf8_string, 12, nil) == "東"
+      assert CharUtils.get_char_at(utf8_string, 13, nil) == "京"
     end
 
     test "handles nil input gracefully" do
@@ -65,9 +65,9 @@ defmodule JsonRemedy.Utils.CharUtilsTest do
       utf8_string = "café résumé 東京"
 
       assert CharUtils.skip_to_character(utf8_string, "é", 0) == 3
-      assert CharUtils.skip_to_character(utf8_string, "é", 4) == 9
-      assert CharUtils.skip_to_character(utf8_string, "東", 0) == 11
-      assert CharUtils.skip_to_character(utf8_string, "京", 0) == 12
+      assert CharUtils.skip_to_character(utf8_string, "é", 4) == 6
+      assert CharUtils.skip_to_character(utf8_string, "東", 0) == 12
+      assert CharUtils.skip_to_character(utf8_string, "京", 0) == 13
     end
 
     test "handles nil inputs gracefully" do
@@ -97,7 +97,7 @@ defmodule JsonRemedy.Utils.CharUtilsTest do
 
     test "handles starting from non-zero position" do
       assert CharUtils.skip_whitespaces_at("hello   world", 5, String.length("hello   world")) == 8
-      assert CharUtils.skip_whitespaces_at("test  \t\n  end", 4, String.length("test  \t\n  end")) == 9
+      assert CharUtils.skip_whitespaces_at("test  \t\n  end", 4, String.length("test  \t\n  end")) == 10
     end
 
     test "returns same position when no whitespace" do
@@ -115,7 +115,7 @@ defmodule JsonRemedy.Utils.CharUtilsTest do
       # Test with UTF-8 content after whitespace
       utf8_string = "  \t café"
 
-      assert CharUtils.skip_whitespaces_at(utf8_string, 0, String.length(utf8_string)) == 3
+      assert CharUtils.skip_whitespaces_at(utf8_string, 0, String.length(utf8_string)) == 4
     end
 
     test "handles nil input gracefully" do
@@ -123,29 +123,29 @@ defmodule JsonRemedy.Utils.CharUtilsTest do
     end
   end
 
-  describe "is_whitespace?/1" do
+  describe "whitespace?/1" do
     test "identifies standard whitespace characters" do
-      assert CharUtils.is_whitespace?(" ") == true
-      assert CharUtils.is_whitespace?("\t") == true
-      assert CharUtils.is_whitespace?("\n") == true
-      assert CharUtils.is_whitespace?("\r") == true
+      assert CharUtils.whitespace?(" ") == true
+      assert CharUtils.whitespace?("\t") == true
+      assert CharUtils.whitespace?("\n") == true
+      assert CharUtils.whitespace?("\r") == true
     end
 
     test "identifies non-whitespace characters" do
-      assert CharUtils.is_whitespace?("a") == false
-      assert CharUtils.is_whitespace?("1") == false
-      assert CharUtils.is_whitespace?(".") == false
-      assert CharUtils.is_whitespace?("é") == false
+      assert CharUtils.whitespace?("a") == false
+      assert CharUtils.whitespace?("1") == false
+      assert CharUtils.whitespace?(".") == false
+      assert CharUtils.whitespace?("é") == false
     end
 
     test "handles edge cases" do
-      assert CharUtils.is_whitespace?("") == false
-      assert CharUtils.is_whitespace?(nil) == false
+      assert CharUtils.whitespace?("") == false
+      assert CharUtils.whitespace?(nil) == false
     end
 
     test "handles UTF-8 characters" do
-      assert CharUtils.is_whitespace?("東") == false
-      assert CharUtils.is_whitespace?("京") == false
+      assert CharUtils.whitespace?("東") == false
+      assert CharUtils.whitespace?("京") == false
     end
   end
 
