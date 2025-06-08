@@ -14,6 +14,9 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
   @behaviour JsonRemedy.LayerBehaviour
 
   alias JsonRemedy.LayerBehaviour
+  alias JsonRemedy.Layer3.SyntaxHelpers
+  alias JsonRemedy.Layer3.BinaryProcessors
+  alias JsonRemedy.Layer3.ContextManager
 
   # Import types from LayerBehaviour
   @type repair_action :: LayerBehaviour.repair_action()
@@ -481,66 +484,12 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
     end
   end
 
-  # Check if a string matches at a specific position (UTF-8 safe)
-  defp match_at_position?(input, pos, search_string) do
-    search_length = String.length(search_string)
+  # Delegate to SyntaxHelpers
+  defp match_at_position?(input, pos, search_string), do: SyntaxHelpers.match_at_position?(input, pos, search_string)
+  defp is_word_boundary(input, pos, token), do: SyntaxHelpers.is_word_boundary(input, pos, token)
 
-    if pos + search_length > String.length(input) do
-      false
-    else
-      substring = String.slice(input, pos, search_length)
-      substring == search_string
-    end
-  end
-
-  # Check if a token match is at a word boundary
-  defp is_word_boundary(input, pos, token) do
-    token_length = String.length(token)
-
-    # Check character before token
-    before_ok =
-      if pos == 0 do
-        true
-      else
-        prev_char = String.at(input, pos - 1)
-        !is_identifier_char(prev_char)
-      end
-
-    # Check character after token
-    after_ok =
-      if pos + token_length >= String.length(input) do
-        true
-      else
-        next_char = String.at(input, pos + token_length)
-        !is_identifier_char(next_char)
-      end
-
-    before_ok && after_ok
-  end
-
-  # Consume whitespace and return {whitespace_string, new_position}
-  defp consume_whitespace(input, pos) when is_binary(input) and is_integer(pos) do
-    consume_whitespace_acc(input, pos, pos, "")
-  end
-
-  # UTF-8 safe version using String.length
-  defp consume_whitespace_acc(input, current_pos, _start_pos, acc) do
-    if current_pos >= String.length(input) do
-      {acc, current_pos}
-    else
-      consume_whitespace_acc_continue(input, current_pos, acc)
-    end
-  end
-
-  defp consume_whitespace_acc_continue(input, current_pos, acc) do
-    char = String.at(input, current_pos)
-
-    if char in [" ", "\t", "\n", "\r"] do
-      consume_whitespace_acc(input, current_pos + 1, nil, acc <> char)
-    else
-      {acc, current_pos}
-    end
-  end
+  # Delegate to SyntaxHelpers for consistency
+  defp consume_whitespace(input, pos), do: SyntaxHelpers.consume_whitespace(input, pos)
 
   defp fix_trailing_commas_processor(input) when is_binary(input) do
     fix_commas(input)
@@ -551,53 +500,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
   Used to avoid applying repairs to string content.
   """
   @spec inside_string?(input :: String.t(), position :: non_neg_integer()) :: boolean()
-  def inside_string?(input, position)
-      when is_binary(input) and is_integer(position) and position >= 0 do
-    check_string_context(input, position, 0, false, false, nil)
-  end
-
-  # Handle invalid inputs gracefully
-  def inside_string?(nil, _position), do: false
-  def inside_string?(_input, position) when not is_integer(position), do: false
-  def inside_string?(_input, position) when position < 0, do: false
-  def inside_string?(input, _position) when not is_binary(input), do: false
-
-  # Helper function to check if position is inside a string
-  defp check_string_context(_input, position, current_pos, in_string, _escape_next, _quote)
-       when current_pos >= position do
-    in_string
-  end
-
-  defp check_string_context(input, position, current_pos, in_string, escape_next, quote) do
-    if current_pos >= String.length(input) do
-      in_string
-    else
-      char = String.at(input, current_pos)
-
-      cond do
-        escape_next ->
-          check_string_context(input, position, current_pos + 1, in_string, false, quote)
-
-        in_string && char == "\\" ->
-          check_string_context(input, position, current_pos + 1, in_string, true, quote)
-
-        in_string && char == quote ->
-          check_string_context(input, position, current_pos + 1, false, false, nil)
-
-        in_string ->
-          check_string_context(input, position, current_pos + 1, in_string, false, quote)
-
-        char == "\"" ->
-          check_string_context(input, position, current_pos + 1, true, false, "\"")
-
-        char == "'" ->
-          check_string_context(input, position, current_pos + 1, true, false, "'")
-
-        true ->
-          check_string_context(input, position, current_pos + 1, false, false, nil)
-      end
-    end
-  end
+  def inside_string?(input, position), do: ContextManager.inside_string?(input, position)
 
   @doc """
   Apply a single syntax rule with context awareness.
@@ -787,7 +690,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
     else
       char = String.at(input, new_pos)
 
-      if is_identifier_start(char) do
+      if SyntaxHelpers.is_identifier_start(char) do
         # Found potential unquoted key
         {identifier, chars_consumed} = consume_identifier(input, new_pos)
         after_identifier_pos = new_pos + chars_consumed
@@ -965,7 +868,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
     else
       char = String.at(input, new_pos)
 
-      if is_identifier_start(char) do
+      if SyntaxHelpers.is_identifier_start(char) do
         # Found potential unquoted key
         {identifier, chars_consumed} = consume_identifier(input, new_pos)
         after_identifier_pos = new_pos + chars_consumed
@@ -1042,46 +945,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
   """
   @spec get_position_info(input :: String.t(), position :: non_neg_integer()) ::
           %{line: pos_integer(), column: pos_integer(), context: String.t()}
-  def get_position_info(input, position)
-      when is_binary(input) and is_integer(position) and position >= 0 do
-    lines = String.split(input, "\n")
-
-    {line_num, column, _} =
-      Enum.reduce_while(lines, {1, 1, 0}, fn line, {current_line, _col, char_count} ->
-        # +1 for newline
-        line_length = String.length(line) + 1
-
-        if char_count + line_length > position do
-          column = position - char_count + 1
-          {:halt, {current_line, column, char_count}}
-        else
-          {:cont, {current_line + 1, 1, char_count + line_length}}
-        end
-      end)
-
-    context_start = max(0, position - 20)
-    context_end = min(String.length(input), position + 20)
-    context = String.slice(input, context_start, context_end - context_start)
-
-    %{
-      line: line_num,
-      column: column,
-      context: context
-    }
-  end
-
-  # Handle invalid inputs gracefully
-  def get_position_info(nil, _position) do
-    %{line: 1, column: 1, context: ""}
-  end
-
-  def get_position_info(_input, position) when not is_integer(position) or position < 0 do
-    %{line: 1, column: 1, context: ""}
-  end
-
-  def get_position_info(input, _position) when not is_binary(input) do
-    %{line: 1, column: 1, context: inspect(input)}
-  end
+  def get_position_info(input, position), do: ContextManager.get_position_info(input, position)
 
   # Main normalization function using character-by-character parsing
   defp normalize_syntax(content) do
@@ -1200,7 +1064,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
 
       in_string && char_str == quote ->
         # End of string - always use double quotes
-        new_expecting = determine_next_expecting_simple(expecting, stack)
+        new_expecting = BinaryProcessors.determine_next_expecting_simple(expecting, stack)
 
         normalize_syntax_binary_simple(
           rest,
@@ -1230,7 +1094,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
 
       char == ?" ->
         # Start of double-quoted string
-        new_expecting = determine_next_expecting_simple(expecting, stack)
+        new_expecting = BinaryProcessors.determine_next_expecting_simple(expecting, stack)
 
         normalize_syntax_binary_simple(
           rest,
@@ -1247,7 +1111,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
       char == ?' ->
         # Start of single-quoted string - normalize to double quotes
         repair = create_repair("normalized quotes", "Changed single quotes to double quotes", pos)
-        new_expecting = determine_next_expecting_simple(expecting, stack)
+        new_expecting = BinaryProcessors.determine_next_expecting_simple(expecting, stack)
 
         normalize_syntax_binary_simple(
           rest,
@@ -1277,8 +1141,8 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
 
       char == ?} ->
         # Object end
-        {new_stack, _} = pop_stack_safe(stack)
-        new_expecting = determine_expecting_after_close_simple(new_stack)
+        {new_stack, _} = SyntaxHelpers.pop_stack_safe(stack)
+        new_expecting = BinaryProcessors.determine_expecting_after_close_simple(new_stack)
 
         normalize_syntax_binary_simple(
           rest,
@@ -1308,8 +1172,8 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
 
       char == ?] ->
         # Array end
-        {new_stack, _} = pop_stack_safe(stack)
-        new_expecting = determine_expecting_after_close_simple(new_stack)
+        {new_stack, _} = SyntaxHelpers.pop_stack_safe(stack)
+        new_expecting = BinaryProcessors.determine_expecting_after_close_simple(new_stack)
 
         normalize_syntax_binary_simple(
           rest,
@@ -1372,32 +1236,58 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
           pos + 1
         )
 
-      is_identifier_start_char_simple(char) ->
+      SyntaxHelpers.is_identifier_start_char_simple(char) ->
         # Start of identifier - process with binary matching
-        process_identifier_binary_simple(
-          <<char::utf8, rest::binary>>,
-          result_iolist,
-          repairs,
-          in_string,
-          escape_next,
-          quote,
-          stack,
-          expecting,
-          pos
+        {remaining, new_result_iolist, new_repairs, new_in_string, new_escape_next, new_quote, new_stack, new_expecting, new_pos} =
+          BinaryProcessors.process_identifier_binary_simple(
+            <<char::utf8, rest::binary>>,
+            result_iolist,
+            repairs,
+            in_string,
+            escape_next,
+            quote,
+            stack,
+            expecting,
+            pos
+          )
+        
+        normalize_syntax_binary_simple(
+          remaining,
+          new_result_iolist,
+          new_repairs,
+          new_in_string,
+          new_escape_next,
+          new_quote,
+          new_stack,
+          new_expecting,
+          new_pos
         )
 
       char in [?0, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?-, ?+] ->
         # Start of number - process with binary matching
-        process_number_binary_simple(
-          <<char::utf8, rest::binary>>,
-          result_iolist,
-          repairs,
-          in_string,
-          escape_next,
-          quote,
-          stack,
-          expecting,
-          pos
+        {remaining, new_result_iolist, new_repairs, new_in_string, new_escape_next, new_quote, new_stack, new_expecting, new_pos} =
+          BinaryProcessors.process_number_binary_simple(
+            <<char::utf8, rest::binary>>,
+            result_iolist,
+            repairs,
+            in_string,
+            escape_next,
+            quote,
+            stack,
+            expecting,
+            pos
+          )
+        
+        normalize_syntax_binary_simple(
+          remaining,
+          new_result_iolist,
+          new_repairs,
+          new_in_string,
+          new_escape_next,
+          new_quote,
+          new_stack,
+          new_expecting,
+          new_pos
         )
 
       true ->
@@ -1416,149 +1306,8 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
     end
   end
 
-  # Helper functions for binary optimization - UTF-8 safe
-  defp is_identifier_start_char_simple(char) when char >= ?a and char <= ?z, do: true
-  defp is_identifier_start_char_simple(char) when char >= ?A and char <= ?Z, do: true
-  defp is_identifier_start_char_simple(?_), do: true
-  # Allow UTF-8 characters (> 127) to be part of identifiers
-  defp is_identifier_start_char_simple(char) when char > 127, do: true
-  defp is_identifier_start_char_simple(_), do: false
+  # Helper functions for binary optimization - delegate to BinaryProcessors
 
-  defp determine_next_expecting_simple(_expecting, _stack), do: :value
-  defp determine_expecting_after_close_simple([]), do: :value
-  defp determine_expecting_after_close_simple([:object | _]), do: :value
-  defp determine_expecting_after_close_simple([:array | _]), do: :value
-  defp determine_expecting_after_close_simple(_), do: :value
-
-  # Process identifiers with binary pattern matching
-  defp process_identifier_binary_simple(
-         binary,
-         result_iolist,
-         repairs,
-         in_string,
-         escape_next,
-         quote,
-         stack,
-         expecting,
-         pos
-       ) do
-    {identifier, remaining, chars_consumed} = consume_identifier_binary_simple(binary)
-
-    {result_addition, new_repairs} =
-      case identifier do
-        "True" ->
-          repair = create_repair("normalized boolean", "Normalized boolean True -> true", pos)
-          {"true", [repair]}
-
-        "TRUE" ->
-          repair = create_repair("normalized boolean", "Normalized boolean TRUE -> true", pos)
-          {"true", [repair]}
-
-        "False" ->
-          repair = create_repair("normalized boolean", "Normalized boolean False -> false", pos)
-          {"false", [repair]}
-
-        "FALSE" ->
-          repair = create_repair("normalized boolean", "Normalized boolean FALSE -> false", pos)
-          {"false", [repair]}
-
-        "None" ->
-          repair = create_repair("normalized null", "Normalized None -> null", pos)
-          {"null", [repair]}
-
-        "NULL" ->
-          repair = create_repair("normalized null", "Normalized NULL -> null", pos)
-          {"null", [repair]}
-
-        "Null" ->
-          repair = create_repair("normalized null", "Normalized Null -> null", pos)
-          {"null", [repair]}
-
-        _ when expecting == :key ->
-          repair =
-            create_repair(
-              "quoted unquoted key",
-              "Added quotes around unquoted key '#{identifier}'",
-              pos
-            )
-
-          {"\"" <> identifier <> "\"", [repair]}
-
-        _ ->
-          {identifier, []}
-      end
-
-    new_expecting = determine_next_expecting_simple(expecting, stack)
-
-    normalize_syntax_binary_simple(
-      remaining,
-      [result_iolist, result_addition],
-      new_repairs ++ repairs,
-      in_string,
-      escape_next,
-      quote,
-      stack,
-      new_expecting,
-      pos + chars_consumed
-    )
-  end
-
-  # Process numbers with binary pattern matching
-  defp process_number_binary_simple(
-         binary,
-         result_iolist,
-         repairs,
-         in_string,
-         escape_next,
-         quote,
-         stack,
-         expecting,
-         pos
-       ) do
-    {number, remaining, chars_consumed} = consume_number_binary_simple(binary)
-
-    new_expecting = determine_next_expecting_simple(expecting, stack)
-
-    normalize_syntax_binary_simple(
-      remaining,
-      [result_iolist, number],
-      repairs,
-      in_string,
-      escape_next,
-      quote,
-      stack,
-      new_expecting,
-      pos + chars_consumed
-    )
-  end
-
-  # Binary pattern matching for identifier consumption - UTF-8 safe
-  defp consume_identifier_binary_simple(binary),
-    do: consume_identifier_binary_simple(binary, <<>>, 0)
-
-  defp consume_identifier_binary_simple(<<char::utf8, rest::binary>>, acc, count)
-       when (char >= ?a and char <= ?z) or (char >= ?A and char <= ?Z) or
-              (char >= ?0 and char <= ?9) or char == ?_ or char > 127 do
-    # UTF-8 safe: char > 127 allows all UTF-8 multi-byte characters
-    consume_identifier_binary_simple(rest, <<acc::binary, char::utf8>>, count + 1)
-  end
-
-  defp consume_identifier_binary_simple(remaining, acc, count) do
-    {acc, remaining, count}
-  end
-
-  # Binary pattern matching for number consumption
-  defp consume_number_binary_simple(binary), do: consume_number_binary_simple(binary, <<>>, 0)
-
-  defp consume_number_binary_simple(<<char::utf8, rest::binary>>, acc, count)
-       when (char >= ?0 and char <= ?9) or char == ?. or char == ?- or char == ?+ or
-              char == ?e or char == ?E do
-    consume_number_binary_simple(rest, <<acc::binary, char::utf8>>, count + 1)
-  end
-
-  defp consume_number_binary_simple(remaining, acc, count) do
-    {acc, remaining, count}
-  end
 
   # ===== END PHASE 2 OPTIMIZATION =====
 
@@ -1693,7 +1442,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
             result_iolist: [state.result_iolist, "\""],
             in_string: false,
             string_quote: nil,
-            expecting: determine_next_expecting(state)
+            expecting: ContextManager.determine_next_expecting(state)
         }
 
       state.in_string ->
@@ -1707,7 +1456,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
           | result_iolist: [state.result_iolist, "\""],
             in_string: true,
             string_quote: "\"",
-            expecting: determine_next_expecting(state)
+            expecting: ContextManager.determine_next_expecting(state)
         }
 
       char == "'" ->
@@ -1725,7 +1474,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
             in_string: true,
             string_quote: "'",
             repairs: [repair | state.repairs],
-            expecting: determine_next_expecting(state)
+            expecting: ContextManager.determine_next_expecting(state)
         }
 
       char == "{" ->
@@ -1739,13 +1488,13 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
 
       char == "}" ->
         # Object end
-        {new_stack, _} = pop_stack_safe(state.context_stack)
+        {new_stack, _} = SyntaxHelpers.pop_stack_safe(state.context_stack)
 
         %{
           state
           | result_iolist: [state.result_iolist, char],
             context_stack: new_stack,
-            expecting: determine_expecting_after_close(new_stack)
+            expecting: ContextManager.determine_expecting_after_close(new_stack)
         }
 
       char == "[" ->
@@ -1759,13 +1508,13 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
 
       char == "]" ->
         # Array end
-        {new_stack, _} = pop_stack_safe(state.context_stack)
+        {new_stack, _} = SyntaxHelpers.pop_stack_safe(state.context_stack)
 
         %{
           state
           | result_iolist: [state.result_iolist, char],
             context_stack: new_stack,
-            expecting: determine_expecting_after_close(new_stack)
+            expecting: ContextManager.determine_expecting_after_close(new_stack)
         }
 
       char == ":" ->
@@ -1787,7 +1536,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
         # Whitespace - preserve but don't change expectations
         %{state | result_iolist: [state.result_iolist, char]}
 
-      is_identifier_start(char) ->
+      SyntaxHelpers.is_identifier_start(char) ->
         # Start of identifier - could be unquoted key, boolean, null, etc.
         process_identifier_iolist(content, state)
 
@@ -1820,7 +1569,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
             result: state.result <> "\"",
             in_string: false,
             string_quote: nil,
-            expecting: determine_next_expecting(state)
+            expecting: ContextManager.determine_next_expecting(state)
         }
 
       state.in_string ->
@@ -1834,7 +1583,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
           | result: state.result <> "\"",
             in_string: true,
             string_quote: "\"",
-            expecting: determine_next_expecting(state)
+            expecting: ContextManager.determine_next_expecting(state)
         }
 
       char == "'" ->
@@ -1852,7 +1601,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
             in_string: true,
             string_quote: "'",
             repairs: [repair | state.repairs],
-            expecting: determine_next_expecting(state)
+            expecting: ContextManager.determine_next_expecting(state)
         }
 
       char == "{" ->
@@ -1866,13 +1615,13 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
 
       char == "}" ->
         # Object end
-        {new_stack, _} = pop_stack_safe(state.context_stack)
+        {new_stack, _} = SyntaxHelpers.pop_stack_safe(state.context_stack)
 
         %{
           state
           | result: state.result <> char,
             context_stack: new_stack,
-            expecting: determine_expecting_after_close(new_stack)
+            expecting: ContextManager.determine_expecting_after_close(new_stack)
         }
 
       char == "[" ->
@@ -1886,13 +1635,13 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
 
       char == "]" ->
         # Array end
-        {new_stack, _} = pop_stack_safe(state.context_stack)
+        {new_stack, _} = SyntaxHelpers.pop_stack_safe(state.context_stack)
 
         %{
           state
           | result: state.result <> char,
             context_stack: new_stack,
-            expecting: determine_expecting_after_close(new_stack)
+            expecting: ContextManager.determine_expecting_after_close(new_stack)
         }
 
       char == ":" ->
@@ -1914,7 +1663,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
         # Whitespace - preserve but don't change expectations
         %{state | result: state.result <> char}
 
-      is_identifier_start(char) ->
+      SyntaxHelpers.is_identifier_start(char) ->
         # Start of identifier - could be unquoted key, boolean, null, etc.
         process_identifier(content, state)
 
@@ -1948,7 +1697,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
           | result_iolist: [state.result_iolist, "true"],
             position: state.position + chars_consumed - 1,
             repairs: [repair | state.repairs],
-            expecting: determine_next_expecting(state)
+            expecting: ContextManager.determine_next_expecting(state)
         }
 
       identifier in ["False", "FALSE"] ->
@@ -1964,7 +1713,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
           | result_iolist: [state.result_iolist, "false"],
             position: state.position + chars_consumed - 1,
             repairs: [repair | state.repairs],
-            expecting: determine_next_expecting(state)
+            expecting: ContextManager.determine_next_expecting(state)
         }
 
       # Check for null values that need normalization
@@ -1977,7 +1726,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
           | result_iolist: [state.result_iolist, "null"],
             position: state.position + chars_consumed - 1,
             repairs: [repair | state.repairs],
-            expecting: determine_next_expecting(state)
+            expecting: ContextManager.determine_next_expecting(state)
         }
 
       # Check if this should be a quoted key
@@ -2003,7 +1752,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
           state
           | result_iolist: [state.result_iolist, identifier],
             position: state.position + chars_consumed - 1,
-            expecting: determine_next_expecting(state)
+            expecting: ContextManager.determine_next_expecting(state)
         }
 
       true ->
@@ -2024,7 +1773,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
       state
       | result_iolist: [state.result_iolist, number],
         position: state.position + chars_consumed - 1,
-        expecting: determine_next_expecting(state)
+        expecting: ContextManager.determine_next_expecting(state)
     }
   end
 
@@ -2047,7 +1796,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
           | result: state.result <> "true",
             position: state.position + chars_consumed - 1,
             repairs: [repair | state.repairs],
-            expecting: determine_next_expecting(state)
+            expecting: ContextManager.determine_next_expecting(state)
         }
 
       identifier in ["False", "FALSE"] ->
@@ -2063,7 +1812,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
           | result: state.result <> "false",
             position: state.position + chars_consumed - 1,
             repairs: [repair | state.repairs],
-            expecting: determine_next_expecting(state)
+            expecting: ContextManager.determine_next_expecting(state)
         }
 
       # Check for null values that need normalization
@@ -2076,7 +1825,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
           | result: state.result <> "null",
             position: state.position + chars_consumed - 1,
             repairs: [repair | state.repairs],
-            expecting: determine_next_expecting(state)
+            expecting: ContextManager.determine_next_expecting(state)
         }
 
       # Check if this should be a quoted key
@@ -2102,7 +1851,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
           state
           | result: state.result <> identifier,
             position: state.position + chars_consumed - 1,
-            expecting: determine_next_expecting(state)
+            expecting: ContextManager.determine_next_expecting(state)
         }
 
       true ->
@@ -2123,39 +1872,13 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
       state
       | result: state.result <> number,
         position: state.position + chars_consumed - 1,
-        expecting: determine_next_expecting(state)
+        expecting: ContextManager.determine_next_expecting(state)
     }
   end
 
-  # Consume identifier characters
-  defp consume_identifier(content, start_pos) do
-    consume_while(content, start_pos, &is_identifier_char/1)
-  end
-
-  # Consume number characters
-  defp consume_number(content, start_pos) do
-    consume_while(content, start_pos, &is_number_char/1)
-  end
-
-  # Generic consume while predicate is true
-  defp consume_while(content, start_pos, predicate) do
-    consume_while_acc(content, start_pos, start_pos, predicate, "")
-  end
-
-  defp consume_while_acc(content, current_pos, start_pos, predicate, acc) do
-    # Add bounds checking for UTF-8 safety
-    if current_pos >= String.length(content) do
-      {acc, current_pos - start_pos}
-    else
-      char = String.at(content, current_pos)
-
-      if char && predicate.(char) do
-        consume_while_acc(content, current_pos + 1, start_pos, predicate, acc <> char)
-      else
-        {acc, current_pos - start_pos}
-      end
-    end
-  end
+  # Delegate to SyntaxHelpers
+  defp consume_identifier(content, start_pos), do: SyntaxHelpers.consume_identifier(content, start_pos)
+  defp consume_number(content, start_pos), do: SyntaxHelpers.consume_number(content, start_pos)
 
   # Post-process to handle comma issues
   defp post_process_commas(content) when is_binary(content) do
@@ -2750,74 +2473,10 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
       String.starts_with?(str, "[")
   end
 
-  # Helper functions
-  defp is_identifier_start(char) when is_binary(char) do
-    # Support ASCII letters, underscore, and UTF-8 characters
-    (char >= "a" && char <= "z") ||
-      (char >= "A" && char <= "Z") ||
-      char == "_" ||
-      is_utf8_letter(char)
-  end
 
-  defp is_identifier_start(_), do: false
 
-  defp is_identifier_char(char) when is_binary(char) do
-    is_identifier_start(char) || (char >= "0" && char <= "9") || char == "$"
-  end
 
-  defp is_identifier_char(_), do: false
-
-  # Check if a character is a UTF-8 letter (simplified approach)
-  defp is_utf8_letter(char) when is_binary(char) do
-    # For UTF-8 characters, we'll be permissive and allow any non-ASCII character
-    # that's not a control character or common JSON syntax character
-    byte_size(char) > 1 &&
-      char != "\"" &&
-      char != "'" &&
-      char != "{" &&
-      char != "}" &&
-      char != "[" &&
-      char != "]" &&
-      char != ":" &&
-      char != "," &&
-      char != " " &&
-      char != "\t" &&
-      char != "\n" &&
-      char != "\r"
-  end
-
-  defp is_number_char(char) do
-    (char >= "0" && char <= "9") || char in [".", "-", "+", "e", "E"]
-  end
-
-  defp pop_stack_safe([]), do: {[], nil}
-  defp pop_stack_safe([head | tail]), do: {tail, head}
-
-  defp determine_next_expecting(state) do
-    case List.first(state.context_stack) do
-      :object -> :comma_or_end
-      :array -> :comma_or_end
-      _ -> :value
-    end
-  end
-
-  defp determine_expecting_after_close(stack) do
-    case List.first(stack) do
-      :object -> :comma_or_end
-      :array -> :comma_or_end
-      _ -> :value
-    end
-  end
-
-  defp create_repair(action, _description, position) do
-    %{
-      layer: :syntax_normalization,
-      action: action,
-      position: position,
-      original: nil,
-      replacement: nil
-    }
-  end
+  defp create_repair(action, description, position), do: SyntaxHelpers.create_repair(action, description, position)
 
   # Simple heuristic to detect if content has syntax issues (no regex)
   defp has_syntax_issues?(content) do
@@ -2863,7 +2522,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
       char_str == "\"" ->
         check_unquoted_keys(rest, true, false, "\"", pos + 1)
 
-      !in_string && is_identifier_start(char_str) ->
+      !in_string && SyntaxHelpers.is_identifier_start(char_str) ->
         # Found start of identifier outside string, check if it's followed by colon
         case find_colon_after_identifier(content, pos) do
           {:found, _colon_pos} -> true
