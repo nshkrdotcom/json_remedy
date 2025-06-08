@@ -106,6 +106,9 @@
 - **🧪 Test Coverage:** Comprehensive for completed layers
 - **📚 Documentation:** Complete for Layers 1-3
 
+### ⚠️ Implementation Style Note
+**IMPORTANT**: When implementing remaining phases, ensure you follow the actual parameter usage patterns, function signatures, and coding style found in the existing codebase at `/lib/json_remedy/` and `/test/unit/`, rather than the examples in this document. The actual implementation may use different parameter names, structures, or patterns than shown in these planning documents.
+
 ---
 
 ## Overview

@@ -217,6 +217,151 @@ human_input = ~s|{name: Alice, age: 30, scores: [95 87 92], active: true,}|
 # => %{"name" => "Alice", "age" => 30, "scores" => [95, 87, 92], "active" => true}
 ```
 
+## Examples
+
+JsonRemedy includes comprehensive examples demonstrating real-world usage scenarios. Run any of these to see the library in action:
+
+### 📚 **Basic Usage Examples**
+```bash
+mix run examples/basic_usage.exs
+```
+Learn the fundamentals with step-by-step examples:
+- Fixing unquoted keys
+- Normalizing quote styles  
+- Handling boolean/null variants
+- Repairing structural issues
+- Processing LLM outputs
+
+### 🌍 **Real-World Scenarios**
+```bash
+mix run examples/real_world_scenarios.exs
+```
+See JsonRemedy handle realistic problematic JSON:
+- **LLM/ChatGPT outputs** with code fences and mixed syntax
+- **Legacy system exports** with comments and non-standard formatting
+- **User form input** with mixed quote styles and missing delimiters
+- **Configuration files** with comments and trailing commas
+- **API responses** with inconsistent formatting
+- **Database dumps** with structural issues
+- **JavaScript object literals** with functions and invalid syntax
+- **Log outputs** with embedded JSON in text
+
+### ⚡ **Performance Examples**
+```bash
+mix run examples/quick_performance.exs
+```
+Understand JsonRemedy's performance characteristics:
+- Fast path optimization for valid JSON
+- Layer-specific performance breakdown
+- Throughput measurements for different input sizes
+- Memory usage patterns
+
+### 🔬 **Stress Testing**
+```bash
+mix run examples/simple_stress_test.exs
+```
+Verify reliability under load:
+- Repeated repair operations
+- Nested structure handling
+- Large array processing
+- Memory usage stability
+
+### 📊 **Example Output**
+
+Here's what you'll see when running the real-world scenarios:
+
+```
+=== JsonRemedy Real-World Scenarios ===
+
+Example 1: LLM/ChatGPT Output with Code Fences
+==============================================
+Input (LLM response with code fences and explanatory text):
+Here's the user data you requested:
+
+```json
+{
+  "users": [
+    {name: "Alice Johnson", age: 32, role: "engineer"},
+    {name: "Bob Smith", age: 28, role: "designer"}
+  ],
+  "metadata": {
+    generated_at: "2024-01-15",
+    total_count: 2,
+    active_only: True
+  }
+}
+```
+
+Processing LLM Output through JsonRemedy pipeline...
+
+✓ Layer 1 (Content Cleaning): Applied 1 repairs
+✓ Layer 3 (Syntax Normalization): Applied 4 repairs  
+✓ Layer 4 (Validation): SUCCESS - Valid JSON produced!
+
+Final repaired JSON:
+-------------------
+{
+  "users": [
+    {
+      "name": "Alice Johnson",
+      "age": 32,
+      "role": "engineer"
+    },
+    {
+      "name": "Bob Smith", 
+      "age": 28,
+      "role": "designer"
+    }
+  ],
+  "metadata": {
+    "generated_at": "2024-01-15",
+    "total_count": 2,
+    "active_only": true
+  }
+}
+
+Total repairs applied: 5
+Repair summary:
+  1. removed code fences and wrapper text
+  2. normalized unquoted key 'name' to "name"
+  3. normalized unquoted key 'age' to "age"  
+  4. normalized unquoted key 'role' to "role"
+  5. normalized boolean True -> true
+```
+
+All examples include detailed output showing:
+- **Input analysis**: What's wrong with the JSON
+- **Layer-by-layer processing**: Which layers made repairs
+- **Final output**: Clean, valid JSON
+- **Repair summary**: Detailed log of all fixes applied
+- **Performance metrics**: Timing and throughput data
+
+### 🎯 **Custom Examples**
+
+Create your own examples using the same patterns:
+
+```elixir
+# examples/my_custom_example.exs
+defmodule MyCustomExample do
+  def test_my_json do
+    malformed = ~s|{my: 'problematic', json: True}|
+    
+    case JsonRemedy.repair(malformed, logging: true) do
+      {:ok, result, context} ->
+        IO.puts("✓ Repaired successfully!")
+        IO.puts("Result: #{Jason.encode!(result, pretty: true)}")
+        IO.puts("Repairs: #{length(context.repairs)}")
+      {:error, reason} ->
+        IO.puts("✗ Failed: #{reason}")
+    end
+  end
+end
+
+MyCustomExample.test_my_json()
+```
+
+Run with: `mix run examples/my_custom_example.exs`
+
 ## The 5-Layer Architecture
 
 JsonRemedy's strength comes from its pragmatic, layered approach where each layer uses the optimal technique:

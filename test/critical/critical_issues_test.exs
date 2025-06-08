@@ -208,9 +208,31 @@ defmodule JsonRemedy.CriticalIssuesTestSuite do
         {:validate_options, 1}
       ]
 
+      # Ensure module is loaded and compiled (handle race conditions)
+      module = JsonRemedy.Layer3.SyntaxNormalization
+      :code.ensure_loaded(module)
+
+      # Give a moment for compilation to complete if needed
+      if not Code.ensure_loaded?(module) do
+        Process.sleep(100)
+        :code.ensure_loaded(module)
+      end
+
       for {function_name, arity} <- public_functions do
-        assert function_exported?(JsonRemedy.Layer3.SyntaxNormalization, function_name, arity),
-               "Function #{function_name}/#{arity} should be exported"
+        # Robust check with retry logic for race conditions
+        exported =
+          case function_exported?(module, function_name, arity) do
+            true ->
+              true
+
+            false ->
+              # Retry once after brief pause (handles compilation timing)
+              Process.sleep(50)
+              function_exported?(module, function_name, arity)
+          end
+
+        assert exported,
+               "Function #{function_name}/#{arity} should be exported from #{module}"
       end
 
       # All functions should be tested in either existing or critical tests

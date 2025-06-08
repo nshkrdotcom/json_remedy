@@ -142,6 +142,9 @@
 - **🔧 Implementation Coverage**: 37.5% complete (3/8 major components)
 - **📋 Ready for Implementation**: Layers 4-5, Pipeline, Error handling, Performance monitoring
 
+### ⚠️ Implementation Style Note
+**IMPORTANT**: When implementing the API contracts defined in this document, ensure you follow the actual parameter usage patterns, function signatures, type specifications, and coding conventions found in the existing codebase at `/lib/json_remedy/layer_behaviour.ex` and related modules. The actual implementation may use different parameter names, return structures, or type patterns than shown in these contract specifications.
+
 ---
 
 ## Core Type System
@@ -664,7 +667,7 @@ defmodule JsonRemedy.Pipeline do
   Merge layer-specific options with global options.
   """
   @spec merge_options(global_opts :: keyword(), layer_opts :: keyword()) :: keyword()
-  def merge_options(global_opts, layer_opts)
+  def merge_options(global_opts, layerOpts)
   
   @doc """
   Get ordered list of layers based on priority.
@@ -1680,7 +1683,7 @@ defmodule JsonRemedy.Security do
   @type validation_result :: 
     :ok 
     | {:warning, [security_violation()]}
-    | {:error, [security_violation()]}
+    | {:error, [security_violation]}
   
   @doc """
   Validate input against security policies.
@@ -1927,56 +1930,6 @@ defmodule JsonRemedy.CLI do
   """
   @spec handle_error(error :: any(), options :: cli_options()) :: String.t()
   def handle_error(error, options)
-end
-```
-
----
-
-## Integration with External Systems
-
-### Web Framework Integration
-```elixir
-defmodule JsonRemedy.Plug do
-  @moduledoc """
-  Plug middleware for automatic JSON repair in web requests.
-  
-  Integrates with Phoenix and other Plug-based frameworks to
-  automatically repair malformed JSON in request bodies.
-  """
-  
-  @type plug_options :: [
-    {:enabled, boolean()},
-    {:content_types, [String.t()]},
-    {:max_body_size, pos_integer()},
-    {:log_repairs, boolean()},
-    {:fallback_on_error, boolean()},
-    {:repair_options, keyword()}
-  ]
-  
-  @doc """
-  Initialize the plug with options.
-  """
-  @spec init(options :: plug_options()) :: plug_options()
-  def init(options)
-  
-  @doc """
-  Call the plug to process request.
-  """
-  @spec call(conn :: Plug.Conn.t(), options :: plug_options()) :: Plug.Conn.t()
-  def call(conn, options)
-  
-  @doc """
-  Check if request should be processed.
-  """
-  @spec should_process?(conn :: Plug.Conn.t(), options :: plug_options()) :: boolean()
-  def should_process?(conn, options)
-  
-  @doc """
-  Repair request body JSON.
-  """
-  @spec repair_request_body(body :: String.t(), options :: keyword()) :: 
-    {:ok, String.t()} | {:error, String.t()}
-  def repair_request_body(body, options)
 end
 ```
 
