@@ -1,0 +1,114 @@
+# Elaborating on the Probabilistic Repair Model for JsonRemedy
+
+This document expands on the Probabilistic Repair Model, a core component of the innovative ideas proposed for JsonRemedy. It delves into the mechanics of the "cost system" and the "beam search engine," which together allow the library to intelligently navigate and resolve JSON malformations.
+
+## The Cost System: Quantifying Repair Plausibility
+
+The cost system is fundamental to the probabilistic approach. It assigns a numerical "cost" to each potential repair action, reflecting how drastic, unlikely, or potentially disruptive that action is. The goal is always to find a sequence of repairs that results in valid JSON with the minimum total cost.
+
+### Defining Costs: Factors and Considerations
+
+Defining appropriate costs is crucial and will require iteration and empirical tuning. Costs should generally be positive integers, where lower costs signify more plausible or "safer" repairs.
+
+Key factors influencing cost assignment:
+
+1.  **Type of Error/Repair**:
+    *   **Low Cost (e.g., 1-5)**:
+        *   Changing single quotes to double quotes (`'key'` -> `"key"`).
+        *   Normalizing boolean/null literals (`True` -> `true`, `None` -> `null`).
+        *   Adding a missing comma between elements in an array/object if context strongly suggests it.
+        *   Removing a single trailing comma.
+    *   **Medium Cost (e.g., 5-15)**:
+        *   Quoting an unquoted key (`key:` -> `"key":`).
+        *   Adding a missing colon after a key if context is clear.
+        *   Inserting a missing brace or bracket if its counterpart is present and context is clear.
+        *   Removing an extraneous comma.
+    *   **High Cost (e.g., 15-50)**:
+        *   Deleting unidentified characters or small blocks of text.
+        *   Wrapping an unwrapped sequence of items in an array (`1, 2, 3` -> `[1, 2, 3]`).
+        *   Splitting concatenated JSON objects/arrays.
+        *   Significant structural changes, like promoting a value to be a key for a nested object.
+    *   **Very High Cost (e.g., 50+)**:
+        *   Deleting large blocks of text.
+        *   Making repairs that lead to substantial data loss.
+
+2.  **Contextual Confidence**:
+    *   The `JsonContext` (tracking parsing state, last token, lookahead) heavily influences cost.
+    *   *Example*: Inserting a comma between two clear values in an array might cost `2`. Inserting a comma in a more ambiguous situation might cost `8`.
+    *   *Example*: If an unquoted string looks like a common keyword (e.g., `true`, `false`, `null`) but is in a key position, the cost to quote it might be lower than quoting `SomeRandomWord`.
+
+3.  **Frequency of Occurrence (Empirical Data)**:
+    *   Over time, the system could learn common malformation patterns. Repairs addressing frequent, known issues (e.g., those from specific LLMs or legacy systems) might have their costs adjusted downwards dynamically or through configuration.
+
+4.  **Specificity of the Repair Rule**:
+    *   A very specific rule that matches a rare but unambiguous error pattern might have a moderate cost, justifying its application when conditions are met.
+    *   A general catch-all rule (e.g., "delete unknown character") would typically have a high cost.
+
+5.  **Potential for Data Loss/Alteration**:
+    *   Repairs that preserve all input characters (e.g., adding quotes, braces) are generally preferred over those that delete characters. Deletions should incur higher costs proportional to the amount of data lost.
+
+### Cumulative Cost
+
+Each `repair_candidate` maintains a `cumulative_cost`, which is the sum of costs of all repairs applied to it so far. This is the primary metric used by the beam search engine for pruning.
+
+## The Beam Search Engine: Navigating Repair Possibilities
+
+The beam search engine orchestrates the repair process across layers, managing the set of active `repair_candidates`.
+
+### Workflow and Mechanics
+
+1.  **Initialization**:
+    *   The engine starts with a single candidate: the original input string, `cumulative_cost: 0`, and an initial `JsonContext`.
+    *   A `beam_width` (e.g., `K=3` or `K=5`) is configured. This determines how many top candidates are kept at each stage.
+
+2.  **Layer-by-Layer Processing**:
+    *   For each layer in the JsonRemedy pipeline:
+        a.  **Candidate Expansion**: The layer receives the current set of `K` (or fewer, if fewer exist) candidates from the beam. For each candidate, the layer's rules and logic generate one or more *new* potential candidates.
+            *   *Example*: If `Layer3.SyntaxNormalization` processes a candidate and identifies three possible fixes for a particular segment of the JSON string, it might output three new candidates derived from the input candidate, each with an updated `content`, `JsonContext`, `log` of repairs, and an incremented `cumulative_cost`.
+        b.  **Aggregation**: All candidates generated by the layer (from all input candidates) are collected into a single list.
+        c.  **Sorting & Pruning**: This list is sorted by `cumulative_cost` (lowest first). The engine then selects the top `K` candidates from this sorted list. These `K` candidates become the input for the next layer. Discarded candidates are not processed further.
+
+3.  **Final Selection**:
+    *   After the final processing layer (e.g., `Layer4.Validation` or a future `Layer5.TolerantParsing`), the `Validation` layer attempts to parse the `content` of each of the `K` surviving candidates.
+    *   The **winning candidate** is the one with the **lowest `cumulative_cost` that successfully parses into valid JSON**.
+    *   If no candidate parses successfully, the repair fails. (Future enhancements could involve returning the "best effort" candidate or one that passed a more lenient validation).
+
+### Beam Width (K): Trade-offs
+
+-   **Small K (e.g., 1-2)**:
+    *   Faster processing, less memory usage.
+    *   Essentially a greedy search if K=1.
+    *   Higher risk of pruning a promising candidate too early if it temporarily has a higher cost but would lead to a better overall solution.
+-   **Large K (e.g., 5-10+)**:
+    *   More comprehensive search, less risk of missing the optimal repair path.
+    *   Slower processing, more memory usage.
+    *   Diminishing returns beyond a certain point; also, might keep too many "bad" paths alive for too long.
+
+The optimal `beam_width` is likely application-dependent or could even be adaptive.
+
+### Interaction with Layers
+
+-   **Layer Design**: Layers (especially `Layer3.SyntaxNormalization`) need to be designed to output multiple candidates. Instead of making one change, a function like `fix_commas` might return:
+    1.  Candidate with comma inserted (cost +X).
+    2.  Candidate with no comma (if that's a valid alternative, cost +Y).
+    3.  Candidate with a different fix (e.g., structure change, cost +Z).
+-   **Context Propagation**: Each new candidate must carry forward an accurately updated `JsonContext` reflecting the changes made.
+
+## Implications for the 5-Layer Architecture
+
+The existing 5-layer architecture can be adapted:
+
+-   **Layer 1 (Content Cleaning)**: Might produce fewer candidates, mostly focused on definitive cleanups (e.g., one candidate with comments stripped, another if it finds multiple JSON snippets to treat as a list). Costing here might relate to how much non-JSON content was removed.
+-   **Layer 2 (Structural Repair)**: Could generate candidates for different structural interpretations (e.g., missing brace vs. missing bracket if ambiguous). Costs would reflect the significance of the structural change.
+-   **Layer 3 (Syntax Normalization)**: This is where the bulk of candidate generation and fine-grained costing would occur, driven by its declarative rule set.
+-   **Layer 4 (Validation)**: Primarily acts as the final arbiter, confirming which of the beam's candidates are valid JSON. It doesn't generate new candidates but provides the success/failure signal.
+-   **Layer 5 (Tolerant Parsing)**: If integrated with beam search, this layer could itself use probabilistic methods, and its "tolerance" could be another factor in cost (e.g., a repair requiring high tolerance is more "costly").
+
+## Benefits of this Model
+
+-   **Handles Ambiguity**: Does not require the first guess to be correct.
+-   **More Robust**: Less likely to get stuck in a local optimum.
+-   **Tunable**: Costs and beam width can be adjusted.
+-   **Extensible**: New repair rules with associated costs can be added to layers.
+
+This probabilistic model, combining a well-defined cost system with a beam search engine, offers a powerful and flexible framework for achieving world-class JSON repair.
