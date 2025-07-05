@@ -87,7 +87,10 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
     # Then try to extract from prose/text
     {result, prose_repairs} = extract_from_prose(result)
 
-    all_repairs = existing_repairs ++ html_repairs ++ prose_repairs
+    # Finally, remove any trailing wrapper text after JSON
+    {result, trailing_repairs} = remove_trailing_wrapper_text(result)
+
+    all_repairs = existing_repairs ++ html_repairs ++ prose_repairs ++ trailing_repairs
     {result, all_repairs}
   end
 
@@ -680,6 +683,66 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
 
   defp find_balanced_end(<<_char::utf8, rest::binary>>, open, close, pos, balance, in_string) do
     find_balanced_end(rest, open, close, pos + 1, balance, in_string)
+  end
+
+  # Remove trailing wrapper text after JSON
+  defp remove_trailing_wrapper_text(input) do
+    trimmed = String.trim(input)
+
+    # Check if input starts with JSON structure
+    cond do
+      String.starts_with?(trimmed, "{") ->
+        check_and_remove_trailing_text(input, "{", "}")
+
+      String.starts_with?(trimmed, "[") ->
+        check_and_remove_trailing_text(input, "[", "]")
+
+      true ->
+        {input, []}
+    end
+  end
+
+  defp check_and_remove_trailing_text(input, open_char, close_char) do
+    # Find where the JSON structure starts
+    json_start =
+      case String.split(input, open_char, parts: 2) do
+        [prefix, _] -> String.length(prefix)
+        _ -> 0
+      end
+
+    # Extract from the JSON start to find the balanced end
+    substring_from_json = String.slice(input, json_start, String.length(input))
+
+    case find_balanced_end(substring_from_json, open_char, close_char) do
+      nil ->
+        # Could not find balanced end, return as is
+        {input, []}
+
+      end_pos ->
+        # Calculate the absolute position where JSON ends
+        json_end = json_start + end_pos + 1
+
+        # Check if there's non-whitespace content after JSON ends
+        after_json = String.slice(input, json_end, String.length(input))
+
+        if String.trim(after_json) == "" do
+          # No significant trailing content
+          {input, []}
+        else
+          # Extract only the JSON portion
+          json_content = String.slice(input, 0, json_end)
+
+          repair = %{
+            layer: :content_cleaning,
+            action: "removed trailing wrapper text",
+            position: json_end,
+            original: input,
+            replacement: json_content
+          }
+
+          {json_content, [repair]}
+        end
+    end
   end
 
   # Helper functions for string detection using direct methods
