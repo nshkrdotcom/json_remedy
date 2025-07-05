@@ -174,6 +174,36 @@ defmodule JsonRemedy.Layer1.ContentCleaningTest do
         assert length(context.repairs) > 0
       end
     end
+
+    test "extracts json with trailing wrapper text (GitHub issue #1)" do
+      # This test case reproduces the issue where JSON followed by text is not cleaned
+      input = """
+      [
+        {
+          "volumeID": "f3a6ffd2-0111-4235-980c-a5ceec215e93",
+          "name": "km-tst-20",
+          "cloudID": "75b10103873d4a1ba0d52b43159a2842",
+          "size": 1,
+          "storageType": "ssd",
+          "state": "creating",
+          "shareable": false,
+          "bootable": false,
+          "volumePool": "General-Flash-002"
+        }
+      ]
+      1 Volume(s) created
+      """
+
+      {:ok, result, context} = ContentCleaning.process(input, %{repairs: [], options: []})
+
+      # Should extract only the JSON array, removing the trailing text
+      trimmed_result = String.trim(result)
+      assert String.starts_with?(trimmed_result, "[")
+      assert String.ends_with?(trimmed_result, "]")
+      assert not String.contains?(result, "1 Volume(s) created")
+      assert length(context.repairs) > 0
+      assert hd(context.repairs).action =~ "removed trailing wrapper text"
+    end
   end
 
   describe "encoding normalization" do
