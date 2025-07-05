@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2025-07-05
+
+### Fixed
+- Fixed issue where wrapper text following JSON blocks was not recognized (#1)
+  - Added dedicated `remove_trailing_wrapper_text/1` function in Layer 1
+  - Now properly removes trailing text after valid JSON structures
+  - Example: `[{"id": 1}]\n1 Volume(s) created` → `[{"id": 1}]`
+
 ## [0.1.2] - 2025-06-08
 
 ### Added
