@@ -55,6 +55,7 @@ Standard JSON parsers fail completely on these inputs. JsonRemedy fixes them int
 - **Comments**: `// line comments` and `/* block comments */` → removed
 - **Hash comments**: `# python-style comments` → removed  
 - **Wrapper text**: Extracts JSON from prose, HTML tags, API responses
+- **Trailing text removal**: `[{"id": 1}]\n1 Volume(s) created` → `[{"id": 1}]` *(v0.1.3+)*
 - **Encoding normalization**: UTF-8 handling and cleanup
 
 ### 🏗️ **Structural Repairs (Layer 2)**
@@ -127,7 +128,7 @@ Add JsonRemedy to your `mix.exs`:
 ```elixir
 def deps do
   [
-    {:json_remedy, "~> 0.1.0"}
+    {:json_remedy, "~> 0.1.3"}
   ]
 end
 ```
