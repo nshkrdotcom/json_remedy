@@ -23,6 +23,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
   alias JsonRemedy.Layer3.QuoteProcessors
   alias JsonRemedy.Layer3.CharacterParsers
   alias JsonRemedy.Layer3.RuleProcessors
+  alias JsonRemedy.Layer3.HardcodedPatterns
 
   # Import types from LayerBehaviour
   @type repair_action :: LayerBehaviour.repair_action()
@@ -341,14 +342,43 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
 
   # Main normalization function using character-by-character parsing
   defp normalize_syntax(content) do
+    # Pre-process with hardcoded patterns from Python json_repair library
+    # This is controlled by feature flag (enabled by default)
+    preprocessed_content = apply_hardcoded_patterns_preprocessing(content)
+
     # Feature flag for optimization phases
     case Application.get_env(:json_remedy, :layer3_optimization_phase, 2) do
       # Phase 2: Binary pattern matching
-      2 -> normalize_syntax_binary_optimized(content)
+      2 -> normalize_syntax_binary_optimized(preprocessed_content)
       # Phase 1: IO lists
-      1 -> normalize_syntax_iolist(content)
+      1 -> normalize_syntax_iolist(preprocessed_content)
       # Original implementation
-      _ -> normalize_syntax_original(content)
+      _ -> normalize_syntax_original(preprocessed_content)
+    end
+  end
+
+  # Apply hardcoded pattern preprocessing (ported from Python json_repair)
+  defp apply_hardcoded_patterns_preprocessing(content) do
+    # Feature flag to enable/disable hardcoded patterns
+    if Application.get_env(:json_remedy, :enable_hardcoded_patterns, true) do
+      content
+      |> HardcodedPatterns.normalize_smart_quotes()
+      |> HardcodedPatterns.fix_doubled_quotes()
+      # NOTE: Escape sequence normalization is intentionally disabled by default
+      # as it can interfere with already-valid JSON escape sequences.
+      # Enable via config if needed: {:enable_escape_normalization, true}
+      |> apply_escape_normalization_if_enabled()
+      |> HardcodedPatterns.normalize_number_formats()
+    else
+      content
+    end
+  end
+
+  defp apply_escape_normalization_if_enabled(content) do
+    if Application.get_env(:json_remedy, :enable_escape_normalization, false) do
+      HardcodedPatterns.normalize_escape_sequences(content)
+    else
+      content
     end
   end
 

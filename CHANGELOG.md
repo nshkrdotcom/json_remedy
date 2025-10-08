@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] - 2025-10-07
+
+### Added
+- **Hardcoded Patterns Module**: New `JsonRemedy.Layer3.HardcodedPatterns` module with battle-tested cleanup patterns ported from Python's `json_repair` library
+  - **Smart quotes normalization**: Converts curly quotes (`""`), guillemets (`«»`), and angle quotes (`‹›`) to standard JSON quotes
+  - **Doubled quotes repair**: Fixes `""value""` → `"value"` while preserving empty strings `""`
+  - **Number format normalization**: Removes thousands separators from numbers: `1,234,567` → `1234567`
+  - **Unicode escape sequences**: Converts `\u263a` → `☺` (opt-in via `:enable_escape_normalization`)
+  - **Hex escape sequences**: Converts `\x41` → `A` (opt-in via `:enable_escape_normalization`)
+- **Comprehensive examples**: New `examples/hardcoded_patterns_examples.exs` with 8 detailed examples demonstrating:
+  - Smart quotes with international text (French, Japanese, German)
+  - Doubled quotes edge cases
+  - Number format cleaning while preserving string content
+  - Unicode/hex escape handling
+  - Combined patterns for real-world LLM output
+  - Full Layer 3 pipeline integration
+- **Feature flags**: Configurable pattern processing with safe defaults
+  - `:enable_hardcoded_patterns` (default: `true`)
+  - `:enable_escape_normalization` (default: `false` for safety)
+
+### Enhanced
+- **Layer 3 integration**: Hardcoded patterns run as pre-processing step before main syntax normalization
+- **Context-aware processing**: Number format normalization preserves commas in string values
+- **International support**: Full UTF-8 support with smart quotes from multiple languages
+- **Documentation**: README updated with dedicated hardcoded patterns section and attribution to source library
+
+### Technical Details
+- **Test coverage**: 47 new tests for hardcoded patterns (100% pass rate)
+- **Source attribution**: Patterns ported from [json_repair](https://github.com/mangiucugna/json_repair) by Stefano Baccianella
+- **Architecture**: Cleanly organized as Layer 3 subsection with proper separation of concerns
+- **Type safety**: Full Dialyzer compliance with zero warnings
+- **Performance**: Regex-based optimizations with minimal overhead
+
+### Performance
+- **Test suite**: 499 total tests, 0 failures (added 47 new tests)
+- **Zero regressions**: All existing functionality preserved
+- **Efficient processing**: Smart quotes and number normalization use optimized regex patterns
+
 ## [0.1.3] - 2025-07-05
 
 ### Fixed
@@ -117,6 +155,9 @@ This is a **100% rewrite** - all previous code has been replaced with the new la
 - Minimal memory overhead (< 8KB for repairs)
 - All operations pass performance thresholds
 
-[Unreleased]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.3...v0.1.4
+[0.1.3]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.2...v0.1.3
+[0.1.2]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/nshkrdotcom/json_remedy/releases/tag/v0.1.0

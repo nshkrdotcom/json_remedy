@@ -79,6 +79,17 @@ Standard JSON parsers fail completely on these inputs. JsonRemedy fixes them int
 - **Unescaped quotes**: `"text "quoted" text"` → proper escaping
 - **Trailing backslashes**: Streaming artifact cleanup
 
+#### 🔧 **Hardcoded Patterns** *(ported from [json_repair](https://github.com/mangiucugna/json_repair) Python library)*
+Layer 3 includes battle-tested cleanup patterns for edge cases commonly found in LLM output:
+
+- **Smart quotes**: `"curly"`, `«guillemets»`, `‹angles›` → `"standard"`
+- **Doubled quotes**: `""value""` → `"value"` (preserves empty strings `""`)
+- **Number formats**: `1,234,567` → `1234567` (removes thousands separators)
+- **Unicode escapes**: `\u263a` → `☺` (opt-in via `:enable_escape_normalization`)
+- **Hex escapes**: `\x41` → `A` (opt-in via `:enable_escape_normalization`)
+
+These patterns run as a pre-processing step and can be controlled via feature flags. See `examples/hardcoded_patterns_examples.exs` for demonstrations.
+
 ### 🚀 **Fast Path Validation (Layer 4)**
 - **Jason.decode optimization**: Valid JSON uses battle-tested parser
 - **Performance monitoring**: Automatic fallback for complex repairs
@@ -128,7 +139,7 @@ Add JsonRemedy to your `mix.exs`:
 ```elixir
 def deps do
   [
-    {:json_remedy, "~> 0.1.3"}
+    {:json_remedy, "~> 0.1.4"}
   ]
 end
 ```
@@ -228,10 +239,22 @@ mix run examples/basic_usage.exs
 ```
 Learn the fundamentals with step-by-step examples:
 - Fixing unquoted keys
-- Normalizing quote styles  
+- Normalizing quote styles
 - Handling boolean/null variants
 - Repairing structural issues
 - Processing LLM outputs
+
+### 🔧 **Hardcoded Patterns Examples** ✨ *NEW*
+```bash
+mix run examples/hardcoded_patterns_examples.exs
+```
+Demonstrates advanced cleanup patterns ported from Python's `json_repair` library:
+- **Smart quotes normalization**: Curly quotes, guillemets, angle quotes
+- **Doubled quotes repair**: `""value""` → `"value"`
+- **Number format cleaning**: `1,234,567` → `1234567`
+- **Unicode/hex escapes**: `\u263a` → `☺`, `\x41` → `A`
+- **International text**: UTF-8 support with smart quotes
+- **Combined patterns**: Real-world LLM output examples
 
 ### 🌍 **Real-World Scenarios**
 ```bash
