@@ -1,11 +1,35 @@
 <svg width="200" height="200" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" version="1.1">
   <defs>
-    <!-- Gradient for hex background - healing purple to remedy green -->
+    <!-- Gradient for hex background - electric magenta into aqua -->
     <linearGradient id="remedy-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#6a2c91;" />
-      <stop offset="50%" style="stop-color:#4e2a8e;" />
-      <stop offset="100%" style="stop-color:#2ecc71;" />
+      <stop offset="0%" style="stop-color:#ff4ecb;" />
+      <stop offset="45%" style="stop-color:#8b2cfa;" />
+      <stop offset="100%" style="stop-color:#00f6ff;" />
     </linearGradient>
+
+    <!-- Neon edge stroke -->
+    <linearGradient id="remedy-outline" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffb347;" />
+      <stop offset="100%" style="stop-color:#28ffb5;" />
+    </linearGradient>
+
+    <!-- Gradient for cross -->
+    <linearGradient id="cross-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;" />
+      <stop offset="100%" style="stop-color:#d5fff6;" />
+    </linearGradient>
+
+    <!-- Gradient stroke for checkmark -->
+    <linearGradient id="check-gradient" x1="38" y1="40" x2="62" y2="57" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" style="stop-color:#00ffa3;" />
+      <stop offset="100%" style="stop-color:#7c4dff;" />
+    </linearGradient>
+
+    <!-- Radial highlight to add shine -->
+    <radialGradient id="hex-highlight" cx="30%" cy="25%" r="60%">
+      <stop offset="0%" style="stop-color:rgba(255,255,255,0.75);" />
+      <stop offset="100%" style="stop-color:rgba(255,255,255,0);" />
+    </radialGradient>
 
     <!-- Shadow for depth -->
     <filter id="remedy-shadow" height="130%">
@@ -36,13 +60,22 @@
 
   <!-- Hex background -->
   <path
-    d="M 50 0 L 93.3 25 L 93.3 75 L 50 100 L 6.7 75 L 6.7 25 Z"
+    d="M 50 2 L 91.6 26 L 91.6 74 L 50 98 L 8.4 74 L 8.4 26 Z"
     fill="url(#remedy-gradient)"
     filter="url(#remedy-shadow)"
   />
 
+  <!-- Neon outline and highlight overlay -->
+  <path
+    d="M 50 2 L 91.6 26 L 91.6 74 L 50 98 L 8.4 74 L 8.4 26 Z"
+    fill="url(#hex-highlight)"
+    stroke="url(#remedy-outline)"
+    stroke-width="1.8"
+    opacity="0.95"
+  />
+
   <!-- JSON curly braces in background (subtle) -->
-  <g opacity="0.25" fill="white">
+  <g opacity="0.18" fill="white">
     <text
       x="25%"
       y="50%"
@@ -72,17 +105,17 @@
   <!-- Medical cross (the "remedy" symbol) -->
   <g filter="url(#cross-glow)">
     <!-- Horizontal bar of cross -->
-    <rect x="38" y="45" width="24" height="10" rx="2" fill="white"/>
+    <rect x="38" y="45" width="24" height="10" rx="2" fill="url(#cross-gradient)"/>
 
     <!-- Vertical bar of cross -->
-    <rect x="45" y="38" width="10" height="24" rx="2" fill="white"/>
+    <rect x="45" y="38" width="10" height="24" rx="2" fill="url(#cross-gradient)"/>
   </g>
 
   <!-- Stylized checkmark overlay (repair/fix indicator) - integrated into cross -->
   <g opacity="0.75">
     <path
       d="M 38 50 L 45 57 L 62 40"
-      stroke="#2ecc71"
+      stroke="url(#check-gradient)"
       stroke-width="3.5"
       stroke-linecap="round"
       stroke-linejoin="round"
