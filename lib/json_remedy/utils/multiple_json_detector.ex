@@ -87,7 +87,7 @@ defmodule JsonRemedy.Utils.MultipleJsonDetector do
       first_char in ["t", "f", "n"] ->
         find_literal_end(json_string)
 
-      first_char && first_char =~ ~r/[0-9-]/ ->
+      is_binary(first_char) and String.match?(first_char, ~r/^[0-9-]/) ->
         find_number_end(json_string)
 
       true ->
@@ -114,11 +114,14 @@ defmodule JsonRemedy.Utils.MultipleJsonDetector do
 
   defp do_find_matching_delimiter(str, pos, brace_count, bracket_count, in_string, opener) do
     char = String.at(str, pos)
-    prev_char = if pos > 0, do: String.at(str, pos - 1), else: nil
+
+    # Check if current character is an unescaped quote
+    is_unescaped_quote =
+      char == "\"" and (pos <= 1 or String.at(str, pos - 1) != "\\")
 
     {new_in_string, new_brace, new_bracket} =
       cond do
-        char == "\"" and prev_char != "\\" ->
+        is_unescaped_quote ->
           {!in_string, brace_count, bracket_count}
 
         !in_string and char == "{" ->
@@ -166,10 +169,6 @@ defmodule JsonRemedy.Utils.MultipleJsonDetector do
     char = String.at(str, pos)
 
     cond do
-      is_nil(char) ->
-        # Reached end of string without finding closing quote
-        {:ok, str, ""}
-
       escaped ->
         find_string_end(str, pos + 1, false)
 
