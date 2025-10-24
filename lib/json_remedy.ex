@@ -7,8 +7,9 @@ defmodule JsonRemedy do
 
   This module provides the main API for JSON repair functionality. It supports
   multiple repair strategies and can handle various types of malformed JSON through
-  a four-layer processing pipeline:
+  a four-layer processing pipeline with intelligent preprocessing:
 
+  - **Preprocessing**: Multiple JSON detection (Pattern 1)
   - **Layer 1**: Content Cleaning (removes code fences, comments, extra text)
   - **Layer 2**: Structural Repair (fixes missing braces, brackets, etc.)
   - **Layer 3**: Syntax Normalization (quotes, booleans, commas, colons)
@@ -33,6 +34,7 @@ defmodule JsonRemedy do
   alias JsonRemedy.Layer2.StructuralRepair
   alias JsonRemedy.Layer3.SyntaxNormalization
   alias JsonRemedy.Layer4.Validation
+  alias JsonRemedy.Utils.MultipleJsonDetector
 
   # Type definitions
   @type json_value ::
@@ -321,14 +323,50 @@ defmodule JsonRemedy do
   # Private implementation functions
 
   defp process_through_pipeline(input, context, logging) do
+    # Pre-processing: Detect multiple JSON values (Pattern 1)
+    # Must run BEFORE layers because:
+    # - Layer 1 may remove additional JSON as "wrapper text"
+    # - Layer 3 adds commas between ]{ which breaks the pattern
+    enable_multiple_json =
+      Application.get_env(:json_remedy, :enable_multiple_json_aggregation, true)
+
+    if enable_multiple_json do
+      case MultipleJsonDetector.parse_multiple(input) do
+        {:ok, result} when is_list(result) and length(result) > 1 ->
+          # Multiple values detected
+          if logging do
+            {:ok, result, context.repairs}
+          else
+            {:ok, result}
+          end
+
+        _ ->
+          # Single value, continue normal pipeline
+          process_normal_pipeline(input, context, logging)
+      end
+    else
+      process_normal_pipeline(input, context, logging)
+    end
+  end
+
+  defp process_normal_pipeline(input, context, logging) do
+    # Pre-processing: Object boundary merging (before Layer 1 to prevent wrapper text removal)
+    {input_after_merge, _merge_repairs} =
+      if Application.get_env(:json_remedy, :enable_object_merging, true) do
+        JsonRemedy.Layer3.ObjectMerger.merge_object_boundaries(input)
+      else
+        {input, []}
+      end
+
     # Layer 1: Content Cleaning
-    with {:ok, output1, context1} <- ContentCleaning.process(input, context),
+    with {:ok, output1, context1} <- ContentCleaning.process(input_after_merge, context),
          # Layer 2: Structural Repair
          {:ok, output2, context2} <- StructuralRepair.process(output1, context1),
          # Layer 3: Syntax Normalization
          {:ok, output3, context3} <- SyntaxNormalization.process(output2, context2),
          # Layer 4: Validation
          {:ok, parsed, final_context} <- Validation.process(output3, context3) do
+      # Pipeline succeeded
       if logging do
         {:ok, parsed, final_context.repairs}
       else

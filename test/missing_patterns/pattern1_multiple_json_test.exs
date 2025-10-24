@@ -13,7 +13,6 @@ defmodule JsonRemedy.MissingPatterns.Pattern1MultipleJsonTest do
   """
 
   @moduletag :missing_pattern
-  @moduletag :skip
 
   describe "multiple JSON values aggregation" do
     test "two empty structures" do

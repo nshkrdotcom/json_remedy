@@ -685,6 +685,15 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
     find_balanced_end(rest, open, close, pos + 1, balance, in_string)
   end
 
+  # Check if a string is valid JSON (not just starts with valid char)
+  defp is_valid_json_start?(str) do
+    first_char = String.at(str, 0)
+
+    # Must start with JSON structure delimiter, not primitives
+    # This prevents "1 Volume(s) created" from being preserved
+    first_char in ["{", "["]
+  end
+
   # Remove trailing wrapper text after JSON
   defp remove_trailing_wrapper_text(input) do
     trimmed = String.trim(input)
@@ -724,23 +733,31 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
 
         # Check if there's non-whitespace content after JSON ends
         after_json = String.slice(input, json_end, String.length(input))
+        after_json_trimmed = String.trim(after_json)
 
-        if String.trim(after_json) == "" do
-          # No significant trailing content
-          {input, []}
-        else
-          # Extract only the JSON portion
-          json_content = String.slice(input, 0, json_end)
+        cond do
+          after_json_trimmed == "" ->
+            # No significant trailing content
+            {input, []}
 
-          repair = %{
-            layer: :content_cleaning,
-            action: "removed trailing wrapper text",
-            position: json_end,
-            original: input,
-            replacement: json_content
-          }
+          is_valid_json_start?(after_json_trimmed) ->
+            # The "trailing" content is actually another JSON value (Pattern 1: Multiple JSON)
+            # Don't remove it - let it be handled by Layer 5
+            {input, []}
 
-          {json_content, [repair]}
+          true ->
+            # Extract only the JSON portion, remove wrapper text
+            json_content = String.slice(input, 0, json_end)
+
+            repair = %{
+              layer: :content_cleaning,
+              action: "removed trailing wrapper text",
+              position: json_end,
+              original: input,
+              replacement: json_content
+            }
+
+            {json_content, [repair]}
         end
     end
   end

@@ -14,7 +14,6 @@ defmodule JsonRemedy.MissingPatterns.Pattern4CommentKeywordsTest do
   """
 
   @moduletag :missing_pattern
-  @moduletag :skip
 
   describe "comment keyword filtering" do
     test "COMMENT keyword between pairs" do

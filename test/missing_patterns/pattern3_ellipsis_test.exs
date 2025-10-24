@@ -13,7 +13,6 @@ defmodule JsonRemedy.MissingPatterns.Pattern3EllipsisTest do
   """
 
   @moduletag :missing_pattern
-  @moduletag :skip
 
   describe "ellipsis filtering in arrays" do
     test "trailing ellipsis - most common case" do

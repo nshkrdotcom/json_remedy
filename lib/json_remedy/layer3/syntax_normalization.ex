@@ -25,6 +25,8 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
   alias JsonRemedy.Layer3.RuleProcessors
   alias JsonRemedy.Layer3.HardcodedPatterns
   alias JsonRemedy.Layer3.HtmlHandlers
+  alias JsonRemedy.Layer3.EllipsisFilter
+  alias JsonRemedy.Layer3.KeywordFilter
 
   # Import types from LayerBehaviour
   @type repair_action :: LayerBehaviour.repair_action()
@@ -358,11 +360,36 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
     end
   end
 
+  # Fix missing values after colons: : } or : ]
+  defp fix_missing_values(content) when is_binary(content) do
+    content
+    # : } → : ""}
+    |> String.replace(~r/:\s*}/, ": \"\"}")
+    # : ] → : ""]
+    |> String.replace(~r/:\s*]/, ": \"\"]")
+  end
+
   # Apply hardcoded pattern preprocessing (ported from Python json_repair)
   defp apply_hardcoded_patterns_preprocessing(content) do
     # Feature flag to enable/disable hardcoded patterns
     if Application.get_env(:json_remedy, :enable_hardcoded_patterns, true) do
-      content
+      {content_after_ellipsis, _ellipsis_repairs} =
+        if Application.get_env(:json_remedy, :enable_ellipsis_filtering, true) do
+          EllipsisFilter.filter_ellipsis(content)
+        else
+          {content, []}
+        end
+
+      {content_after_keywords, _keyword_repairs} =
+        if Application.get_env(:json_remedy, :enable_keyword_filtering, true) do
+          KeywordFilter.filter_keywords(content_after_ellipsis)
+        else
+          {content_after_ellipsis, []}
+        end
+
+      content_after_keywords
+      # Fix : } or : ] patterns
+      |> fix_missing_values()
       |> HardcodedPatterns.normalize_smart_quotes()
       |> HardcodedPatterns.fix_doubled_quotes()
       # NOTE: Escape sequence normalization is intentionally disabled by default

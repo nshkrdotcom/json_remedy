@@ -13,7 +13,6 @@ defmodule JsonRemedy.MissingPatterns.Pattern2ObjectMergingTest do
   """
 
   @moduletag :missing_pattern
-  @moduletag :skip
 
   describe "object boundary merging" do
     test "single extra key-value pair after close" do
