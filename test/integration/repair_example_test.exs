@@ -1,7 +1,7 @@
 defmodule JsonRemedy.RepairExampleTest do
   @moduledoc """
-  Test case for the repair_example.exs functionality.
-  This ensures the main example file continues to work correctly.
+  Test case for the examples/repair_example.exs functionality.
+  This ensures the repair example script continues to work correctly.
   """
   use ExUnit.Case
   doctest JsonRemedy

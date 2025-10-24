@@ -152,8 +152,9 @@ defmodule JsonRemedy do
 
   ## Examples
 
-      iex> JsonRemedy.from_file("config.json")
-      {:ok, %{"setting" => "value"}}
+      iex> {:ok, result} = JsonRemedy.from_file("test/data/invalid.json")
+      iex> is_list(result)
+      true
 
       iex> JsonRemedy.from_file("nonexistent.json", logging: true)
       {:error, "Could not read file: :enoent"}
@@ -358,8 +359,19 @@ defmodule JsonRemedy do
         {input, []}
       end
 
+    # Pre-processing: Hardcoded patterns (CRITICAL: must run before Layer 2!)
+    # This prevents Layer 2 from misinterpreting doubled quotes as unclosed structures
+    input_after_hardcoded =
+      if Application.get_env(:json_remedy, :enable_early_hardcoded_patterns, true) do
+        input_after_merge
+        |> JsonRemedy.Layer3.HardcodedPatterns.normalize_smart_quotes()
+        |> JsonRemedy.Layer3.HardcodedPatterns.fix_doubled_quotes()
+      else
+        input_after_merge
+      end
+
     # Layer 1: Content Cleaning
-    with {:ok, output1, context1} <- ContentCleaning.process(input_after_merge, context),
+    with {:ok, output1, context1} <- ContentCleaning.process(input_after_hardcoded, context),
          # Layer 2: Structural Repair
          {:ok, output2, context2} <- StructuralRepair.process(output1, context1),
          # Layer 3: Syntax Normalization

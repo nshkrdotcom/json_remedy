@@ -18,7 +18,6 @@ defmodule HardcodedPatternsExamples do
   """
 
   alias JsonRemedy.Layer3.HardcodedPatterns
-  alias JsonRemedy.Layer3.SyntaxNormalization
   alias JsonRemedy.Layer4.Validation
 
   def run_all_examples do
@@ -103,18 +102,19 @@ defmodule HardcodedPatternsExamples do
   defp example_2_doubled_quotes do
     IO.puts("Example 2: Doubled Quotes Fix")
     IO.puts("------------------------------")
-    IO.puts("Fixes \"\"value\"\" → \"value\" while preserving empty strings\n")
+    IO.puts("NOTE: This feature is deferred to Layer 5 (Tolerant Parsing)")
+    IO.puts("The patterns require context-aware parsing beyond regex capabilities\n")
 
-    # Simple doubled quotes
+    # Simple doubled quotes - currently a no-op
     input1 = ~s({"key": ""value""})
     IO.puts("Input:  #{input1}")
     output1 = HardcodedPatterns.fix_doubled_quotes(input1)
     IO.puts("Output: #{output1}")
-    IO.puts("Result: " <> if(output1 == ~s({"key": "value"}), do: "✓ Fixed", else: "✗ Failed"))
+    IO.puts("Result: ⏳ Deferred to Layer 5 (function is currently pass-through)")
 
     IO.puts("")
 
-    # Preserve empty strings
+    # Preserve empty strings - works correctly (pass-through)
     input2 = ~s({"empty": "", "filled": "data"})
     IO.puts("Input:  #{input2}")
     output2 = HardcodedPatterns.fix_doubled_quotes(input2)
@@ -123,23 +123,19 @@ defmodule HardcodedPatternsExamples do
     IO.puts(
       "Result: " <>
         if(String.contains?(output2, ~s("empty": "")),
-          do: "✓ Preserved empty string",
-          else: "✗ Failed"
+          do: "✓ Preserved (pass-through working correctly)",
+          else: "✗ Unexpected"
         )
     )
 
     IO.puts("")
 
-    # Multiple doubled quotes in array
+    # Multiple doubled quotes in array - deferred
     input3 = ~s([""item1"", ""item2"", ""item3""])
     IO.puts("Input:  #{input3}")
     output3 = HardcodedPatterns.fix_doubled_quotes(input3)
     IO.puts("Output: #{output3}")
-
-    IO.puts(
-      "Result: " <>
-        if(output3 == ~s(["item1", "item2", "item3"]), do: "✓ All fixed", else: "✗ Failed")
-    )
+    IO.puts("Result: ⏳ Deferred to Layer 5 (will be handled with state machine)")
 
     IO.puts("\n")
   end
@@ -267,21 +263,19 @@ defmodule HardcodedPatternsExamples do
   defp example_6_combined_patterns do
     IO.puts("Example 6: Combined Patterns (Real-World LLM Output)")
     IO.puts("----------------------------------------------------")
-    IO.puts("Demonstrates multiple patterns working together\n")
+    IO.puts("Demonstrates patterns working together (Note: doubled quotes deferred to Layer 5)\n")
 
-    # Realistic LLM output with multiple issues
-    input =
-      ~s({"name": "John Doe", "balance": 1,234.56, "message": «Welcome!», "status": ""active""})
+    # Realistic LLM output - simplified to exclude doubled quotes
+    input = ~s({"name": "John Doe", "balance": 1,234.56, "message": «Welcome!»})
 
     IO.puts("Input:  #{input}")
-    IO.puts("Issues: Smart quotes, doubled quotes, thousands separators")
+    IO.puts("Issues: Smart quotes, thousands separators")
     IO.puts("")
 
-    # Apply all patterns
+    # Apply available patterns
     output =
       input
       |> HardcodedPatterns.normalize_smart_quotes()
-      |> HardcodedPatterns.fix_doubled_quotes()
       |> HardcodedPatterns.normalize_number_formats()
 
     IO.puts("Output: #{output}")
@@ -292,7 +286,7 @@ defmodule HardcodedPatternsExamples do
     case Validation.process(output, context) do
       {:ok, parsed, _} ->
         IO.puts("Parsed: #{inspect(parsed, pretty: true)}")
-        IO.puts("Result: ✓ All patterns applied successfully, valid JSON!")
+        IO.puts("Result: ✓ Patterns applied successfully, valid JSON!")
 
       _ ->
         IO.puts("Result: ✗ Validation failed")
@@ -339,42 +333,33 @@ defmodule HardcodedPatternsExamples do
   end
 
   defp example_8_full_pipeline do
-    IO.puts("Example 8: Full Pipeline Integration")
-    IO.puts("-------------------------------------")
-    IO.puts("Shows hardcoded patterns as part of Layer 3 processing\n")
+    IO.puts("Example 8: Full Pipeline Integration (with Number Edge Cases)")
+    IO.puts("--------------------------------------------------------------")
+    IO.puts("Shows advanced number handling through full JsonRemedy pipeline\n")
 
-    # Complex input with multiple issues
-    input = ~s({name: "Alice", balance: 1,234.56, status: ""active"", note: «Important»})
+    # Complex input with number edge cases (removed doubled quotes - deferred to Layer 5)
+    input =
+      ~s({name: "Alice", balance: 1,234.56, fraction: 1/3, probability: .75, note: «Important»})
 
     IO.puts("Input:  #{input}")
-    IO.puts("Issues: Unquoted key, smart quotes, doubled quotes, thousands separator")
+    IO.puts("Issues: Unquoted key, smart quotes, fraction, leading decimal, thousands separator")
     IO.puts("")
 
-    # Process through Layer 3 (which includes hardcoded patterns)
-    context = %{repairs: [], options: []}
+    # Use full JsonRemedy pipeline
+    case JsonRemedy.repair(input, logging: true) do
+      {:ok, parsed, repairs} ->
+        IO.puts("✓ Successfully repaired!")
+        IO.puts("\nFinal Parsed: #{inspect(parsed, pretty: true)}")
+        IO.puts("\nRepairs Applied (#{length(repairs)} total):")
 
-    case SyntaxNormalization.process(input, context) do
-      {:ok, repaired, updated_context} ->
-        IO.puts("After Layer 3: #{repaired}")
+        Enum.each(repairs, fn repair ->
+          IO.puts("  - #{inspect(repair)}")
+        end)
 
-        # Validate
-        case Validation.process(repaired, updated_context) do
-          {:ok, parsed, _} ->
-            IO.puts("Final Parsed: #{inspect(parsed, pretty: true)}")
-            IO.puts("\nRepairs Applied:")
-
-            Enum.each(updated_context.repairs, fn repair ->
-              IO.puts("  - #{inspect(repair)}")
-            end)
-
-            IO.puts("\nResult: ✓ Full pipeline success!")
-
-          {:error, reason} ->
-            IO.puts("Result: ✗ Validation failed: #{reason}")
-        end
+        IO.puts("\nResult: ✓ Full pipeline success!")
 
       {:error, reason} ->
-        IO.puts("Result: ✗ Layer 3 failed: #{reason}")
+        IO.puts("Result: ✗ Repair failed: #{reason}")
     end
 
     IO.puts("\n")

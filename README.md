@@ -158,7 +158,7 @@ Add JsonRemedy to your `mix.exs`:
 ```elixir
 def deps do
   [
-    {:json_remedy, "~> 0.1.5"}
+    {:json_remedy, "~> 0.1.6"}
   ]
 end
 ```
@@ -250,9 +250,23 @@ human_input = ~s|{name: Alice, age: 30, scores: [95 87 92], active: true,}|
 
 ## Examples
 
-JsonRemedy includes comprehensive examples demonstrating real-world usage scenarios. Run any of these to see the library in action:
+JsonRemedy includes comprehensive examples demonstrating real-world usage scenarios.
 
-### 📚 **Basic Usage Examples**
+### 🚀 **Run All Examples**
+
+To see all examples in action with their full output:
+
+```bash
+./run-examples.sh
+```
+
+This will execute all example scripts and show a summary of results.
+
+### 📚 **Individual Examples**
+
+Run specific examples to see detailed output:
+
+#### **Basic Usage Examples**
 ```bash
 mix run examples/basic_usage.exs
 ```

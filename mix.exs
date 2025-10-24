@@ -1,7 +1,7 @@
 defmodule JsonRemedy.MixProject do
   use Mix.Project
 
-  @version "0.1.5"
+  @version "0.1.6"
   @source_url "https://github.com/nshkrdotcom/json_remedy"
 
   def project do

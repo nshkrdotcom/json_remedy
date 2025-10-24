@@ -2,7 +2,7 @@
 
 # Simple example to repair test/data/invalid.json and show results
 #
-# Run with: mix run repair_example.exs
+# Run with: mix run examples/repair_example.exs
 
 defmodule RepairExample do
   @moduledoc """

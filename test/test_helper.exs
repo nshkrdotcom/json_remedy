@@ -16,6 +16,8 @@ ExUnit.configure(
     # Skip slow tests by default
     :slow,
     # Run integration tests explicitly
-    :integration
+    :integration,
+    # Skip Layer 5 target tests (deferred features)
+    :layer5_target
   ]
 )

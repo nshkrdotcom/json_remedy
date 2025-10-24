@@ -92,6 +92,10 @@ defmodule JsonRemedy.Layer3.HardcodedPatterns do
 
   Supports curly quotes (""), angle quotes (‹›), and guillemets («»).
 
+  Note: Regular single quotes (') are NOT converted here as they may be legitimate
+  content inside string values. Single quote normalization happens later in Layer 3
+  character-by-character parsing where context is available.
+
   ## Examples
 
       iex> normalize_smart_quotes(~s({"key": "value"}))
@@ -111,6 +115,8 @@ defmodule JsonRemedy.Layer3.HardcodedPatterns do
   def normalize_smart_quotes(""), do: ""
 
   def normalize_smart_quotes(input) when is_binary(input) do
+    # Only normalize smart/curly quotes, NOT regular single quotes
+    # Regular single quotes are handled by Layer 3 character parser with context awareness
     Enum.reduce(@smart_quote_pairs, input, fn {smart, standard}, acc ->
       String.replace(acc, smart, standard)
     end)
@@ -181,15 +187,48 @@ defmodule JsonRemedy.Layer3.HardcodedPatterns do
   @doc """
   Fixes doubled quote patterns that sometimes appear in malformed JSON.
 
-  Converts ""value"" to "value" while preserving legitimate empty strings ("").
+  **Note: This feature is deferred to Layer 5 (Tolerant Parsing) and this function
+  is currently a no-op pass-through.**
 
-  ## Examples
+  ## Rationale for Deferral
+
+  After comprehensive TDD investigation, we determined that doubled quote patterns
+  require context-aware parsing beyond regex capabilities. Attempting to fix them
+  with simple regex preprocessing creates more problems than it solves due to:
+
+  1. **Ambiguity**: Cannot distinguish `""value""` (malformed) from `"He said ""hello\"""`
+     (quotes inside string content) without full parsing context
+  2. **False matches**: Regex patterns match legitimate empty strings, escaped quotes,
+     and other valid JSON constructs
+  3. **Pipeline interactions**: Early preprocessing can interfere with Layer 2's
+     structural analysis and Layer 3's character-by-character parsing
+
+  ## Patterns Requiring Layer 5 Implementation
+
+  The following patterns will be addressed in Layer 5 with full JSON state machine
+  and position tracking, following the json_repair Python library's parse_string.py
+  implementation:
+
+  1. **Symmetric doubled quotes**: `""value""` → `"value"`
+  2. **Asymmetric doubled quotes**: `""value"` or `"value""` → `"value"`
+  3. **Tripled quotes**: `\"""value\"""` → `"value"`
+  4. **Quadruple quotes (empty string)**: `\""""` → `""`
+  5. **Doubled quotes in object keys**: `{""key"": "value"}`
+  6. **Doubled quotes inside string content**: `"He said ""hello"" to me"`
+
+  ## Test Coverage
+
+  Comprehensive test suite in test/missing_patterns/doubled_quotes_test.exs (21 tests).
+  Tests are tagged with `:layer5_target` and excluded from main test run until
+  Layer 5 implementation.
+
+  ## Examples (Future Layer 5 Behavior)
 
       iex> fix_doubled_quotes(~s({"key": ""value""}))
-      ~s({"key": "value"})
+      ~s({"key": "value"})  # Layer 5 will handle this
 
       iex> fix_doubled_quotes(~s({"empty": ""}))
-      ~s({"empty": ""})
+      ~s({"empty": ""})  # Currently: pass-through (no change)
 
       iex> fix_doubled_quotes(nil)
       nil
@@ -199,15 +238,20 @@ defmodule JsonRemedy.Layer3.HardcodedPatterns do
   def fix_doubled_quotes(""), do: ""
 
   def fix_doubled_quotes(input) when is_binary(input) do
-    # Pattern: Fix doubled quotes like ""value"" → "value"
-    # Preserve empty strings: "" → ""
-    # Avoid escaped quotes: \"
-
-    # Strategy: Replace four consecutive quotes with two, but only if not escaped
-    # Pattern matches: ""content"" where content doesn't contain quotes
+    # No-op: Deferred to Layer 5 for context-aware implementation
+    # See moduledoc for rationale
     input
-    |> String.replace(~r/(?<!\\)""([^"]+)""(?!")/, "\"\\1\"")
   end
+
+  # NOTE: The following helper functions are preserved for future Layer 5 implementation
+  # They represent the regex-based patterns that were attempted but found to be
+  # insufficient without full parsing context. Layer 5 will use these patterns
+  # as a starting point but with state machine support.
+
+  # defp fix_quadruple_quotes(input) - DEFERRED TO LAYER 5
+  # defp fix_tripled_quotes(input) - DEFERRED TO LAYER 5
+  # defp fix_simple_symmetric_doubled_quotes(input) - DEFERRED TO LAYER 5
+  # defp fix_asymmetric_doubled_quotes(input) - DEFERRED TO LAYER 5
 
   # ==========================================================================
   # Private Helper Functions

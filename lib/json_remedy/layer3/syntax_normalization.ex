@@ -771,8 +771,10 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
           )
         end
 
-      char in [?0, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?-, ?+] ->
-        # Start of number - process with binary matching
+      char in [?0, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?-, ?+, ?., ?$] ->
+        # Start of number or number-like value - process with binary matching
+        # Includes '.' for leading decimal numbers like .25
+        # Includes '$' for currency symbols like $100
         {remaining, new_result_iolist, new_repairs, new_in_string, new_escape_next, new_quote,
          new_stack, new_expecting,
          new_pos} =
