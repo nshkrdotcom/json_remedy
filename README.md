@@ -82,6 +82,11 @@ Standard JSON parsers fail completely on these inputs. JsonRemedy fixes them int
 - **Escape sequences**: `\n`, `\t`, `\uXXXX` → proper Unicode
 - **Unescaped quotes**: `"text "quoted" text"` → proper escaping
 - **Trailing backslashes**: Streaming artifact cleanup
+- **Unquoted HTML values**: `"body":<!DOCTYPE HTML>...` → `"body":"<!DOCTYPE HTML>..."` *(v0.1.5+)*
+  - Handles full HTML error pages from APIs
+  - DOCTYPE declarations, comments, void elements
+  - Self-closing tags, nested structures
+  - Proper escaping of quotes, newlines, special chars
 
 #### 🔧 **Hardcoded Patterns** *(ported from [json_repair](https://github.com/mangiucugna/json_repair) Python library)*
 Layer 3 includes battle-tested cleanup patterns for edge cases commonly found in LLM output:
@@ -451,6 +456,33 @@ The current implementation handles **~95% of real-world malformed JSON** through
 - ⏳ Malformed number handling (e.g., `123,456` → `123`)
 - ⏳ Stream-safe parsing for incomplete JSON
 - ⏳ Literal disambiguation algorithms
+
+### 📋 **Known Missing Patterns**
+
+Based on comprehensive analysis of the [json_repair](https://github.com/mangiucugna/json_repair) Python library, the following patterns are **documented but not yet implemented**. Test cases exist in the repository to track these:
+
+**Critical Missing Patterns** *(test files provided)*:
+1. **Multiple JSON Values Aggregation** - `test_missing_pattern_1_multiple_json.exs`
+   - Pattern: `[]{}`  → `[[],{}]`
+   - Status: 0/10 tests pass
+   - Will wrap multiple complete JSON values into an array
+
+2. **Object Boundary Merging** - `test_missing_pattern_2_object_merging.exs`
+   - Pattern: `{"a":"b"},"c":"d"}` → `{"a":"b","c":"d"}`
+   - Status: 0/10 tests pass
+   - Will merge additional key-value pairs after object close
+
+3. **Ellipsis Filtering** - `test_missing_pattern_3_ellipsis.exs`
+   - Pattern: `[1,2,3,...]` → `[1,2,3]`
+   - Status: 1/10 tests pass (quoted ellipsis preserved correctly)
+   - Will filter unquoted `...` placeholders from arrays
+
+4. **Comment Keywords Filtering** - `test_missing_pattern_4_comment_keywords.exs`
+   - Pattern: `{"a":1, COMMENT "b":2}` → `{"a":1,"b":2}`
+   - Status: 0/10 tests pass
+   - Will filter unquoted keywords like `COMMENT`, `SHOULD_NOT_EXIST`
+
+These patterns are planned for future releases but do not block production use for most real-world scenarios. The current implementation handles the vast majority of malformed JSON encountered in practice.
 
 ## The 5-Layer Architecture
 

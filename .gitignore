@@ -11,3 +11,4 @@ erl_crash.dump
 *.tar
 repomix*.xml
 json_repair_python/
+/json_remedy/

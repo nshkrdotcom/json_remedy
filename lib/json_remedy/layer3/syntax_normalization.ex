@@ -24,6 +24,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
   alias JsonRemedy.Layer3.CharacterParsers
   alias JsonRemedy.Layer3.RuleProcessors
   alias JsonRemedy.Layer3.HardcodedPatterns
+  alias JsonRemedy.Layer3.HtmlHandlers
 
   # Import types from LayerBehaviour
   @type repair_action :: LayerBehaviour.repair_action()
@@ -770,6 +771,29 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
           new_stack,
           new_expecting,
           new_pos
+        )
+
+      char == ?< and expecting == :value and
+          HtmlHandlers.is_html_start?(<<char::utf8, rest::binary>>, 0) ->
+        # Start of HTML content - quote it
+        {html_content, chars_consumed} =
+          HtmlHandlers.extract_html_content(<<char::utf8, rest::binary>>, 0)
+
+        {quoted_html, html_repairs} = HtmlHandlers.quote_html_content(html_content, pos)
+
+        # Calculate remaining binary after consuming HTML
+        remaining = binary_part(rest, chars_consumed - 1, byte_size(rest) - (chars_consumed - 1))
+
+        normalize_syntax_binary_simple(
+          remaining,
+          [result_iolist, quoted_html],
+          html_repairs ++ repairs,
+          in_string,
+          escape_next,
+          quote,
+          stack,
+          :value,
+          pos + chars_consumed
         )
 
       true ->

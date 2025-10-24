@@ -8,6 +8,7 @@ defmodule JsonRemedy.Layer3.CharacterParsers do
 
   alias JsonRemedy.Layer3.SyntaxHelpers
   alias JsonRemedy.Layer3.ContextManager
+  alias JsonRemedy.Layer3.HtmlHandlers
 
   @doc """
   Character-by-character parser - UTF-8 safe.
@@ -229,6 +230,19 @@ defmodule JsonRemedy.Layer3.CharacterParsers do
         # Start of number
         process_number_iolist(content, state)
 
+      char == "<" and state.expecting == :value and
+          HtmlHandlers.is_html_start?(content, state.position) ->
+        # Start of HTML content - quote it
+        {html_iolist, chars_consumed, repairs} = HtmlHandlers.process_html_iolist(content, state)
+
+        %{
+          state
+          | result_iolist: [state.result_iolist, html_iolist],
+            position: state.position + chars_consumed - 1,
+            repairs: repairs ++ state.repairs,
+            expecting: ContextManager.determine_next_expecting(state)
+        }
+
       true ->
         # Other character - pass through
         %{state | result_iolist: [state.result_iolist, char]}
@@ -355,6 +369,19 @@ defmodule JsonRemedy.Layer3.CharacterParsers do
       char in ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "-", "+"] ->
         # Start of number
         process_number(content, state)
+
+      char == "<" and state.expecting == :value and
+          HtmlHandlers.is_html_start?(content, state.position) ->
+        # Start of HTML content - quote it
+        {html_string, chars_consumed, repairs} = HtmlHandlers.process_html_string(content, state)
+
+        %{
+          state
+          | result: state.result <> html_string,
+            position: state.position + chars_consumed - 1,
+            repairs: repairs ++ state.repairs,
+            expecting: ContextManager.determine_next_expecting(state)
+        }
 
       true ->
         # Other character - pass through

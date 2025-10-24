@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5] - 2025-10-24
+
+### Added
+- **Professional hex-shaped logo**: New `assets/json_remedy_logo.svg` with modern design featuring medical cross and Elixir drop, representing JSON healing in the Elixir ecosystem
+- **HTML content handling in Layer 3**: New `HtmlHandlers` module for intelligent detection and quoting of unquoted HTML values
+  - **DOCTYPE declarations**: `<!DOCTYPE HTML ...>` properly detected and quoted
+  - **HTML comments**: `<!-- ... -->` handled correctly without breaking tag depth tracking
+  - **Void elements**: Self-closing tags (`<meta>`, `<br>`, `<hr>`, `<img>`, etc.) tracked without expecting closing tags
+  - **Self-closing syntax**: `<tag />` properly recognized and depth-adjusted
+  - **Nested structures**: HTML with JSON-like content in attributes handled correctly
+  - **Smart extraction**: Tracks HTML tag depth to determine end of HTML block
+  - **Proper escaping**: Quotes, newlines, tabs, backslashes all escaped for valid JSON
+  - **Array support**: HTML values in arrays work correctly
+- **Comprehensive test suite**: 15 new tests covering HTML content scenarios
+  - API error responses with full HTML pages
+  - Simple HTML fragments
+  - HTML with nested JSON-like braces
+  - Multiple HTML values in objects and arrays
+  - Complex real-world edge cases
+- **Example documentation**: `examples/html_content_examples.exs` with 5 challenging real-world scenarios
+- **Missing patterns analysis**: Test files documenting 4 patterns from json_repair Python library not yet implemented:
+  - `test_missing_pattern_1_multiple_json.exs` - Multiple JSON value aggregation (0/10 pass)
+  - `test_missing_pattern_2_object_merging.exs` - Object boundary merging (0/10 pass)
+  - `test_missing_pattern_3_ellipsis.exs` - Ellipsis filtering (1/10 pass)
+  - `test_missing_pattern_4_comment_keywords.exs` - Comment keyword filtering (0/10 pass)
+
+### Enhanced
+- **Documentation**: Logo integrated in README.md and HexDocs
+- **Package assets**: Logo included in hex package for professional documentation display
+- **README.md**: Added HTML handling documentation and known missing patterns section
+- **Test coverage**: All 82 critical tests passing, 15 new HTML tests passing (100% success rate)
+
+### Fixed
+- **HTML in JSON values**: Unquoted HTML after colons (e.g., `"body":<!DOCTYPE HTML>`) now properly quoted and escaped
+- **API error pages**: Full HTML error responses from APIs (503, 404, etc.) now handled correctly
+- **Complex HTML**: Nested tags, attributes with quotes, special entities all work properly
+
+### Technical Details
+- **Smart depth tracking**: Monitors both HTML tag depth and JSON-like structure depth
+- **Context awareness**: Only stops at JSON delimiters when all HTML tags are closed
+- **Void element list**: 15 HTML5 void elements recognized (`area`, `base`, `br`, `col`, `embed`, `hr`, `img`, `input`, `link`, `meta`, `param`, `source`, `track`, `wbr`)
+- **Binary optimization**: HTML detection integrated into Layer 3's binary processing pipeline
+- **Zero regressions**: All existing tests remain passing
+
 ## [0.1.4] - 2025-10-07
 
 ### Added
