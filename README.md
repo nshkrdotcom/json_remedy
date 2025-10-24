@@ -13,7 +13,7 @@
 
 A comprehensive, production-ready JSON repair library for Elixir that intelligently fixes malformed JSON strings from any source—LLMs, legacy systems, data pipelines, streaming APIs, and human input.
 
-**JsonRemedy** uses a sophisticated 5-layer repair pipeline where each layer employs the most appropriate technique: content cleaning, state machines for structural repairs, character-by-character parsing for syntax normalization, and battle-tested parsers for validation. The result is a robust system that handles virtually any JSON malformation while preserving valid content.
+**JsonRemedy** uses a sophisticated pre-processing stage followed by a 5-layer repair pipeline where each layer employs the most appropriate technique: pattern detection, content cleaning, state machines for structural repairs, character-by-character parsing for syntax normalization, and battle-tested parsers for validation. The result is a robust system that handles virtually any JSON malformation while preserving valid content.
 
 ## The Problem
 
@@ -53,6 +53,16 @@ Malformed JSON is everywhere in real-world systems:
 Standard JSON parsers fail completely on these inputs. JsonRemedy fixes them intelligently.
 
 ## Comprehensive Repair Capabilities
+
+### 🔄 **Pre-processing Pipeline** *(v0.1.5+)*
+Runs **before** the main layer pipeline to handle complex patterns that would otherwise be broken by subsequent layers:
+
+- **Multiple JSON detection**: `[]{}` → `[[], {}]` - Aggregates consecutive JSON values
+- **Object boundary merging**: `{"a":"b"},"c":"d"}` → `{"a":"b","c":"d"}` - Merges split objects
+- **Ellipsis filtering**: `[1,2,3,...]` → `[1,2,3]` - Removes unquoted ellipsis placeholders (LLM truncation markers)
+- **Keyword filtering**: `{"a":1, COMMENT "b":2}` → `{"a":1,"b":2}` - Removes debug keywords (COMMENT, DEBUG_INFO, PLACEHOLDER, TODO, etc.)
+
+*Inspired by patterns from the [json_repair](https://github.com/mangiucugna/json_repair) Python library*
 
 ### 🧹 **Content Cleaning (Layer 1)**
 - **Code fences**: ````json ... ```` → clean JSON
@@ -253,7 +263,7 @@ Learn the fundamentals with step-by-step examples:
 - Repairing structural issues
 - Processing LLM outputs
 
-### 🔧 **Hardcoded Patterns Examples** ✨ *NEW*
+### 🔧 **Hardcoded Patterns Examples** ✨ *NEW in v0.1.4*
 ```bash
 mix run examples/hardcoded_patterns_examples.exs
 ```
@@ -264,6 +274,19 @@ Demonstrates advanced cleanup patterns ported from Python's `json_repair` librar
 - **Unicode/hex escapes**: `\u263a` → `☺`, `\x41` → `A`
 - **International text**: UTF-8 support with smart quotes
 - **Combined patterns**: Real-world LLM output examples
+
+### 🌐 **HTML Content Examples** ✨ *NEW in v0.1.5*
+```bash
+mix run examples/html_content_examples.exs
+```
+Demonstrates handling of unquoted HTML content in JSON values (common when APIs return error pages):
+- **API 503 Service Unavailable**: Full HTML error page in JSON response
+- **API 404 Not Found**: HTML 404 page with comments and metadata
+- **Simple HTML fragments**: Bio fields and content with HTML tags
+- **Multiple HTML values**: Arrays of templates with HTML content
+- **Complex nested HTML**: HTML with JSON-like attributes and embedded scripts
+
+This example showcases the HTML detection and quoting capabilities added in v0.1.5, which handle real-world scenarios where API endpoints return HTML error pages instead of JSON.
 
 ### 🌍 **Real-World Scenarios**
 ```bash
@@ -457,49 +480,61 @@ The current implementation handles **~95% of real-world malformed JSON** through
 - ⏳ Stream-safe parsing for incomplete JSON
 - ⏳ Literal disambiguation algorithms
 
-### 📋 **Known Missing Patterns**
+### ✅ **Previously Missing Patterns - Now Implemented!** *(v0.1.5)*
 
-Based on comprehensive analysis of the [json_repair](https://github.com/mangiucugna/json_repair) Python library, the following patterns are **documented but not yet implemented**. Test cases exist in the repository to track these:
+Based on comprehensive analysis of the [json_repair](https://github.com/mangiucugna/json_repair) Python library, the following patterns were initially documented as missing but are **now fully implemented** in v0.1.5:
 
-**Critical Missing Patterns** *(test files provided)*:
-1. **Multiple JSON Values Aggregation** - `test_missing_pattern_1_multiple_json.exs`
+**Implemented Advanced Patterns** *(all tests passing)*:
+1. **Multiple JSON Values Aggregation** ✅ - `test/missing_patterns/pattern1_multiple_json_test.exs`
    - Pattern: `[]{}`  → `[[],{}]`
-   - Status: 0/10 tests pass
-   - Will wrap multiple complete JSON values into an array
+   - **Status: ✅ 10/10 tests pass**
+   - Implementation: `MultipleJsonDetector` utility in pre-processing pipeline
+   - Wraps multiple complete JSON values into an array
 
-2. **Object Boundary Merging** - `test_missing_pattern_2_object_merging.exs`
+2. **Object Boundary Merging** ✅ - `test/missing_patterns/pattern2_object_merging_test.exs`
    - Pattern: `{"a":"b"},"c":"d"}` → `{"a":"b","c":"d"}`
-   - Status: 0/10 tests pass
-   - Will merge additional key-value pairs after object close
+   - **Status: ✅ 10/10 tests pass**
+   - Implementation: `ObjectMerger` module in Layer 3
+   - Merges additional key-value pairs after premature object close
 
-3. **Ellipsis Filtering** - `test_missing_pattern_3_ellipsis.exs`
+3. **Ellipsis Filtering** ✅ - `test/missing_patterns/pattern3_ellipsis_test.exs`
    - Pattern: `[1,2,3,...]` → `[1,2,3]`
-   - Status: 1/10 tests pass (quoted ellipsis preserved correctly)
-   - Will filter unquoted `...` placeholders from arrays
+   - **Status: ✅ 10/10 tests pass**
+   - Implementation: `EllipsisFilter` module in Layer 3
+   - Filters unquoted `...` placeholders from arrays (common in LLM output)
 
-4. **Comment Keywords Filtering** - `test_missing_pattern_4_comment_keywords.exs`
+4. **Comment Keywords Filtering** ✅ - `test/missing_patterns/pattern4_comment_keywords_test.exs`
    - Pattern: `{"a":1, COMMENT "b":2}` → `{"a":1,"b":2}`
-   - Status: 0/10 tests pass
-   - Will filter unquoted keywords like `COMMENT`, `SHOULD_NOT_EXIST`
+   - **Status: ✅ 10/10 tests pass**
+   - Implementation: `KeywordFilter` module in Layer 3
+   - Filters unquoted keywords: `COMMENT`, `SHOULD_NOT_EXIST`, `DEBUG_INFO`, `PLACEHOLDER`, `TODO`, `FIXME`, etc.
 
-These patterns are planned for future releases but do not block production use for most real-world scenarios. The current implementation handles the vast majority of malformed JSON encountered in practice.
+These advanced patterns handle edge cases commonly found in LLM outputs, debug logs, and malformed API responses. All 40 pattern tests pass with 100% success rate.
 
-## The 5-Layer Architecture
+## The Pre-processing + 5-Layer Architecture
 
-JsonRemedy's strength comes from its pragmatic, layered approach where each layer uses the optimal technique:
+JsonRemedy's strength comes from its pragmatic, layered approach where each stage uses the optimal technique:
 
 ```elixir
 defmodule JsonRemedy.LayeredRepair do
   def repair(input) do
     input
-    |> Layer1.content_cleaning()      # Cleaning: Remove wrappers, comments, normalize encoding
-    |> Layer2.structural_repair()     # State machine: Fix delimiters, nesting, structure  
-    |> Layer3.syntax_normalization()  # Char parsing: Fix quotes, booleans, commas
-    |> Layer4.validation_attempt()    # Jason.decode: Fast path for clean JSON
-    |> Layer5.tolerant_parsing()      # Custom parser: Handle edge cases gracefully (FUTURE)
+    |> PreProcessing.detect_and_fix()  # Pre-process: Multiple JSON, object merging, filtering
+    |> Layer1.content_cleaning()       # Cleaning: Remove wrappers, comments, normalize encoding
+    |> Layer2.structural_repair()      # State machine: Fix delimiters, nesting, structure
+    |> Layer3.syntax_normalization()   # Char parsing: Fix quotes, booleans, commas
+    |> Layer4.validation_attempt()     # Jason.decode: Fast path for clean JSON
+    |> Layer5.tolerant_parsing()       # Custom parser: Handle edge cases gracefully (FUTURE)
   end
 end
 ```
+
+### 🔄 **Pre-processing Stage** *(v0.1.5)*
+**Technique**: Pattern detection and early transformation
+- Detects and aggregates multiple consecutive JSON values
+- Merges split objects with boundary issues
+- Filters ellipsis and debug keywords
+- Runs before Layer 1 to prevent pattern interference
 
 ### 🧹 **Layer 1: Content Cleaning**
 **Technique**: String operations
@@ -972,20 +1007,25 @@ mix run bench/memory_profile.exs
 
 ```
 lib/
-├── json_remedy.ex                     # Main API
+├── json_remedy.ex                     # Main API with pre-processing
 ├── json_remedy/
 │   ├── layer_behaviour.ex             # Common interface for all layers
+│   ├── utils/
+│   │   └── multiple_json_detector.ex  # ✅ Pre-processing: Multiple JSON aggregation
 │   ├── layer1/
 │   │   └── content_cleaning.ex        # ✅ Code fences, comments, wrappers
 │   ├── layer2/
 │   │   └── structural_repair.ex       # ✅ Delimiters, nesting, state machine
 │   ├── layer3/
-│   │   └── syntax_normalization.ex    # ✅ Quotes, booleans, char-by-char parsing
+│   │   ├── syntax_normalization.ex    # ✅ Quotes, booleans, char-by-char parsing
+│   │   ├── object_merger.ex           # ✅ Pre-processing: Object boundary merging
+│   │   ├── ellipsis_filter.ex         # ✅ Filter unquoted ellipsis
+│   │   └── keyword_filter.ex          # ✅ Filter debug keywords
 │   ├── layer4/
-│   │   └── validation.ex              # Jason.decode optimization
+│   │   └── validation.ex              # ✅ Jason.decode optimization
 │   ├── layer5/                         # ⏳ PLANNED
 │   │   └── tolerant_parsing.ex        # ⏳ Custom parser with error recovery
-│   ├── pipeline.ex                    # Layer orchestration
+│   ├── pipeline.ex                    # Layer orchestration with pre-processing
 │   ├── performance.ex                 # Monitoring and health checks
 │   └── config.ex                      # Configuration management
 ```

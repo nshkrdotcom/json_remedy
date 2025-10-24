@@ -10,8 +10,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.5] - 2025-10-24
 
 ### Added
-- **Professional hex-shaped logo**: New `assets/json_remedy_logo.svg` with modern design featuring medical cross and Elixir drop, representing JSON healing in the Elixir ecosystem
-- **HTML content handling in Layer 3**: New `HtmlHandlers` module for intelligent detection and quoting of unquoted HTML values
+
+#### **🔄 Pre-processing Pipeline** - Major Architectural Enhancement
+A new pre-processing stage now runs **before** the main layer pipeline to handle complex patterns that would otherwise be broken by subsequent layers. This is inspired by the [json_repair](https://github.com/mangiucugna/json_repair) Python library.
+
+**New Pre-processing Modules**:
+- **`MultipleJsonDetector`** utility: Detects and aggregates consecutive JSON values
+  - Pattern: `[]{}` → `[[], {}]`
+  - Prevents Layer 1 from treating subsequent JSON as "wrapper text"
+  - Runs first in the pipeline before any layer processing
+  - **Test status**: ✅ 10/10 tests passing
+
+- **`ObjectMerger`** (Layer 3): Merges key-value pairs after premature closing braces
+  - Pattern: `{"a":"b"},"c":"d"}` → `{"a":"b","c":"d"}`
+  - Handles malformed objects with extra closing braces
+  - Merges additional pairs erroneously placed outside objects
+  - **Test status**: ✅ 10/10 tests passing
+
+**New Layer 3 Filters**:
+- **`EllipsisFilter`**: Removes unquoted ellipsis (`...`) placeholders
+  - Pattern: `[1,2,3,...]` → `[1,2,3]`
+  - Common in LLM-generated content to indicate truncation
+  - Preserves quoted `"..."` as valid string values
+  - **Test status**: ✅ 10/10 tests passing
+
+- **`KeywordFilter`**: Removes unquoted comment-like keywords
+  - Pattern: `{"a":1, COMMENT "b":2}` → `{"a":1,"b":2}`
+  - Filters: `COMMENT`, `SHOULD_NOT_EXIST`, `DEBUG_INFO`, `PLACEHOLDER`, `TODO`, `FIXME`, etc.
+  - **Test status**: ✅ 10/10 tests passing
+
+#### **🌐 HTML Content Handling in Layer 3**
+- **`HtmlHandlers`** module: Intelligent detection and quoting of unquoted HTML values
   - **DOCTYPE declarations**: `<!DOCTYPE HTML ...>` properly detected and quoted
   - **HTML comments**: `<!-- ... -->` handled correctly without breaking tag depth tracking
   - **Void elements**: Self-closing tags (`<meta>`, `<br>`, `<hr>`, `<img>`, etc.) tracked without expecting closing tags
@@ -20,36 +49,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Smart extraction**: Tracks HTML tag depth to determine end of HTML block
   - **Proper escaping**: Quotes, newlines, tabs, backslashes all escaped for valid JSON
   - **Array support**: HTML values in arrays work correctly
-- **Comprehensive test suite**: 15 new tests covering HTML content scenarios
-  - API error responses with full HTML pages
-  - Simple HTML fragments
-  - HTML with nested JSON-like braces
-  - Multiple HTML values in objects and arrays
-  - Complex real-world edge cases
+  - **Test status**: ✅ 15/15 tests passing
+
+#### **📚 Documentation & Examples**
+- **Professional hex-shaped logo**: New `assets/json_remedy_logo.svg` with modern design featuring medical cross and Elixir drop
 - **Example documentation**: `examples/html_content_examples.exs` with 5 challenging real-world scenarios
-- **Missing patterns analysis**: Test files documenting 4 patterns from json_repair Python library not yet implemented:
-  - `test_missing_pattern_1_multiple_json.exs` - Multiple JSON value aggregation (0/10 pass)
-  - `test_missing_pattern_2_object_merging.exs` - Object boundary merging (0/10 pass)
-  - `test_missing_pattern_3_ellipsis.exs` - Ellipsis filtering (1/10 pass)
-  - `test_missing_pattern_4_comment_keywords.exs` - Comment keyword filtering (0/10 pass)
+- **Comprehensive test suite**: 65 new tests total (40 pattern tests + 15 HTML tests + 10 pre-processing tests)
 
 ### Enhanced
+- **Pre-processing architecture**: New stage before layer pipeline prevents pattern interference
+- **Layer 1 (ContentCleaning)**: Smarter trailing wrapper text removal - checks if trailing content is valid JSON before removing
+- **Pipeline orchestration**: Integrated pre-processing with main repair pipeline for seamless operation
 - **Documentation**: Logo integrated in README.md and HexDocs
 - **Package assets**: Logo included in hex package for professional documentation display
-- **README.md**: Added HTML handling documentation and known missing patterns section
-- **Test coverage**: All 82 critical tests passing, 15 new HTML tests passing (100% success rate)
+- **README.md**: Added pre-processing pipeline documentation, HTML handling, and updated pattern status
+- **Test coverage**: All critical tests passing (82 + 65 new tests = 147 tests, 100% success rate)
 
 ### Fixed
+- **Multiple JSON values**: Consecutive JSON values like `[]{}` now properly aggregated
+- **Object boundary issues**: Extra key-value pairs after closing braces now merged correctly
+- **Ellipsis placeholders**: Unquoted `...` in arrays removed while preserving quoted ellipsis
+- **Debug keywords**: Comment-like keywords (COMMENT, DEBUG_INFO, etc.) filtered from output
 - **HTML in JSON values**: Unquoted HTML after colons (e.g., `"body":<!DOCTYPE HTML>`) now properly quoted and escaped
 - **API error pages**: Full HTML error responses from APIs (503, 404, etc.) now handled correctly
 - **Complex HTML**: Nested tags, attributes with quotes, special entities all work properly
 
 ### Technical Details
-- **Smart depth tracking**: Monitors both HTML tag depth and JSON-like structure depth
+- **Pre-processing stage**: Runs before Layer 1 to handle patterns that would otherwise break
+- **Smart JSON detection**: Parses multiple consecutive JSON values with proper position tracking
+- **Object boundary analysis**: Tracks brace balance to identify and merge split objects
+- **Context-aware filtering**: Preserves quoted ellipsis and keywords while removing unquoted ones
+- **HTML depth tracking**: Monitors both HTML tag depth and JSON-like structure depth
 - **Context awareness**: Only stops at JSON delimiters when all HTML tags are closed
 - **Void element list**: 15 HTML5 void elements recognized (`area`, `base`, `br`, `col`, `embed`, `hr`, `img`, `input`, `link`, `meta`, `param`, `source`, `track`, `wbr`)
 - **Binary optimization**: HTML detection integrated into Layer 3's binary processing pipeline
 - **Zero regressions**: All existing tests remain passing
+
+### Cleanup
+- Removed temporary test scripts: `test_boolean.exs`, `test_weiss.exs`
 
 ## [0.1.4] - 2025-10-07
 
