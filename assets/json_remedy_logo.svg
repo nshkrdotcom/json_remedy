@@ -1,0 +1,109 @@
+<svg width="200" height="200" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" version="1.1">
+  <defs>
+    <!-- Gradient for hex background - healing purple to remedy green -->
+    <linearGradient id="remedy-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6a2c91;" />
+      <stop offset="50%" style="stop-color:#4e2a8e;" />
+      <stop offset="100%" style="stop-color:#2ecc71;" />
+    </linearGradient>
+
+    <!-- Shadow for depth -->
+    <filter id="remedy-shadow" height="130%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="1.2"/>
+      <feOffset dx="1.5" dy="1.5" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.4"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode in="offsetblur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Glow effect for the medical cross -->
+    <filter id="cross-glow" height="150%" width="150%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="1.5"/>
+      <feOffset dx="0" dy="0" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.8"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode in="offsetblur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Hex background -->
+  <path
+    d="M 50 0 L 93.3 25 L 93.3 75 L 50 100 L 6.7 75 L 6.7 25 Z"
+    fill="url(#remedy-gradient)"
+    filter="url(#remedy-shadow)"
+  />
+
+  <!-- JSON curly braces in background (subtle) -->
+  <g opacity="0.25" fill="white">
+    <text
+      x="25%"
+      y="50%"
+      font-family="Monaco, 'Courier New', monospace"
+      font-size="40"
+      font-weight="bold"
+      fill="white"
+      text-anchor="middle"
+      dominant-baseline="central"
+    >
+      {
+    </text>
+    <text
+      x="75%"
+      y="50%"
+      font-family="Monaco, 'Courier New', monospace"
+      font-size="40"
+      font-weight="bold"
+      fill="white"
+      text-anchor="middle"
+      dominant-baseline="central"
+    >
+      }
+    </text>
+  </g>
+
+  <!-- Medical cross with elixir drop integration (the "remedy" symbol) -->
+  <g filter="url(#cross-glow)">
+    <!-- Horizontal bar of cross -->
+    <rect x="38" y="45" width="24" height="10" rx="2" fill="white"/>
+
+    <!-- Vertical bar of cross -->
+    <rect x="45" y="38" width="10" height="24" rx="2" fill="white"/>
+
+    <!-- Small elixir drop at center (healing drop) -->
+    <path
+      d="M 50 42 Q 48 44 48 46 Q 48 48 50 48 Q 52 48 52 46 Q 52 44 50 42 Z"
+      fill="#2ecc71"
+      opacity="0.9"
+    />
+  </g>
+
+  <!-- Stylized checkmark overlay (repair/fix indicator) -->
+  <g opacity="0.9">
+    <path
+      d="M 32 52 L 38 58 L 55 35"
+      stroke="#2ecc71"
+      stroke-width="3.5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      fill="none"
+      filter="url(#cross-glow)"
+    />
+  </g>
+
+  <!-- Optional: Small circuit pattern in corner (tech/parsing aspect) -->
+  <g opacity="0.3" stroke="white" stroke-width="0.8" fill="none">
+    <circle cx="20" cy="20" r="2" fill="white"/>
+    <line x1="20" y1="22" x2="20" y2="28"/>
+    <circle cx="20" cy="30" r="1.5" fill="white"/>
+    <line x1="22" y1="20" x2="28" y2="20"/>
+    <circle cx="30" cy="20" r="1.5" fill="white"/>
+  </g>
+</svg>

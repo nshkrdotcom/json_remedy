@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/json_remedy_logo.svg" alt="JsonRemedy Logo" width="200" height="200">
+</p>
+
 # JsonRemedy
 
 [![GitHub CI](https://github.com/nshkrdotcom/json_remedy/actions/workflows/elixir.yaml/badge.svg)](https://github.com/nshkrdotcom/json_remedy/actions/workflows/elixir.yaml)
@@ -139,7 +143,7 @@ Add JsonRemedy to your `mix.exs`:
 ```elixir
 def deps do
   [
-    {:json_remedy, "~> 0.1.4"}
+    {:json_remedy, "~> 0.1.5"}
   ]
 end
 ```
