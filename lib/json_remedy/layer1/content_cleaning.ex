@@ -455,17 +455,32 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
       nil ->
         {input, []}
 
-      {start_pos, end_pos, comment_text} ->
+      {start_pos, end_pos, _comment_text} ->
         if not comment_inside_string?(input, start_pos) do
-          before = String.slice(input, 0, start_pos)
-          after_comment = String.slice(input, end_pos + 2, String.length(input))
+          before =
+            if start_pos > 0 do
+              binary_part(input, 0, start_pos)
+            else
+              ""
+            end
+
+          comment_length = end_pos - start_pos + 2
+          after_start = end_pos + 2
+
+          after_comment =
+            if after_start >= byte_size(input) do
+              ""
+            else
+              binary_part(input, after_start, byte_size(input) - after_start)
+            end
+
           result = before <> after_comment
 
           repair = %{
             layer: :content_cleaning,
             action: "removed block comment",
             position: start_pos,
-            original: comment_text,
+            original: binary_part(input, start_pos, comment_length),
             replacement: ""
           }
 
@@ -531,18 +546,20 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
   defp find_matching_block_comment_end(_input, _pos, 0), do: nil
 
   defp find_substring_position(string, substring, start_offset) do
-    # Search from the start_offset position
-    search_string = String.slice(string, start_offset, String.length(string))
+    total_size = byte_size(string)
 
-    case String.split(search_string, substring, parts: 2) do
-      [before, _after] ->
-        start_offset + byte_size(before)
-
-      [_single_part] ->
+    cond do
+      start_offset >= total_size ->
         nil
 
-      _ ->
-        nil
+      true ->
+        slice_size = total_size - start_offset
+        slice = binary_part(string, start_offset, slice_size)
+
+        case :binary.match(slice, substring) do
+          {match_start, _length} -> start_offset + match_start
+          :nomatch -> nil
+        end
     end
   end
 
@@ -643,11 +660,17 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
   end
 
   defp extract_balanced_content(input, start_pos, open_char, close_char) do
-    substring = String.slice(input, start_pos, String.length(input))
+    total_size = byte_size(input)
 
-    case find_balanced_end(substring, open_char, close_char) do
-      nil -> nil
-      end_pos -> String.slice(substring, 0, end_pos + 1)
+    if start_pos >= total_size do
+      nil
+    else
+      substring = binary_part(input, start_pos, total_size - start_pos)
+
+      case find_balanced_end(substring, open_char, close_char) do
+        nil -> nil
+        end_pos -> binary_part(substring, 0, end_pos + byte_size(close_char))
+      end
     end
   end
 
@@ -667,22 +690,25 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
 
   defp find_balanced_end(<<char::utf8, rest::binary>>, open, close, pos, balance, false)
        when <<char::utf8>> == open do
-    find_balanced_end(rest, open, close, pos + 1, balance + 1, false)
+    char_size = byte_size(<<char::utf8>>)
+    find_balanced_end(rest, open, close, pos + char_size, balance + 1, false)
   end
 
   defp find_balanced_end(<<char::utf8, rest::binary>>, open, close, pos, balance, false)
        when <<char::utf8>> == close do
+    char_size = byte_size(<<char::utf8>>)
     new_balance = balance - 1
 
     if new_balance == 0 do
       pos
     else
-      find_balanced_end(rest, open, close, pos + 1, new_balance, false)
+      find_balanced_end(rest, open, close, pos + char_size, new_balance, false)
     end
   end
 
-  defp find_balanced_end(<<_char::utf8, rest::binary>>, open, close, pos, balance, in_string) do
-    find_balanced_end(rest, open, close, pos + 1, balance, in_string)
+  defp find_balanced_end(<<char::utf8, rest::binary>>, open, close, pos, balance, in_string) do
+    char_size = byte_size(<<char::utf8>>)
+    find_balanced_end(rest, open, close, pos + char_size, balance, in_string)
   end
 
   # Check if a string is valid JSON (not just starts with valid char)
@@ -715,12 +741,13 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
     # Find where the JSON structure starts
     json_start =
       case String.split(input, open_char, parts: 2) do
-        [prefix, _] -> String.length(prefix)
+        [prefix, _] -> byte_size(prefix)
         _ -> 0
       end
 
-    # Extract from the JSON start to find the balanced end
-    substring_from_json = String.slice(input, json_start, String.length(input))
+    total_size = byte_size(input)
+    substring_size = total_size - json_start
+    substring_from_json = binary_part(input, json_start, substring_size)
 
     case find_balanced_end(substring_from_json, open_char, close_char) do
       nil ->
@@ -732,7 +759,15 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
         json_end = json_start + end_pos + 1
 
         # Check if there's non-whitespace content after JSON ends
-        after_json = String.slice(input, json_end, String.length(input))
+        after_size = max(total_size - json_end, 0)
+
+        after_json =
+          if after_size > 0 do
+            binary_part(input, json_end, after_size)
+          else
+            ""
+          end
+
         after_json_trimmed = String.trim(after_json)
 
         cond do
@@ -747,7 +782,7 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
 
           true ->
             # Extract only the JSON portion, remove wrapper text
-            json_content = String.slice(input, 0, json_end)
+            json_content = binary_part(input, 0, json_end)
 
             repair = %{
               layer: :content_cleaning,

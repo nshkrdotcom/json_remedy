@@ -263,6 +263,30 @@ defmodule JsonRemedy.Layer1.ContentCleaningTest do
       # Should have multiple repairs logged
       assert length(context.repairs) >= 2
     end
+
+    test "handles windows newlines across code fences and comments" do
+      input =
+        "Here's your data:\r\n```json\r\n// User data\r\n{\r\n  \"name\": \"Alice\",\r\n  /* age field */\r\n  \"age\": 30\r\n}\r\n```\r\nHope this helps!\r\n"
+
+      {:ok, result, _context} = ContentCleaning.process(input, %{repairs: [], options: []})
+
+      assert String.contains?(result, "\"name\": \"Alice\"")
+      refute String.contains?(result, "```")
+      refute String.contains?(result, "//")
+      refute String.contains?(result, "/*")
+      refute String.contains?(result, "Hope this helps!")
+    end
+
+    test "removes trailing wrapper text with windows newlines" do
+      input = "[\r\n  {\"id\": 1}\r\n]\r\n1 Volume(s) created\r\n"
+
+      {:ok, result, _context} = ContentCleaning.process(input, %{repairs: [], options: []})
+
+      trimmed = String.trim(result)
+      assert String.starts_with?(trimmed, "[")
+      assert String.ends_with?(trimmed, "]")
+      refute String.contains?(result, "1 Volume(s) created")
+    end
   end
 
   describe "LayerBehaviour implementation" do
