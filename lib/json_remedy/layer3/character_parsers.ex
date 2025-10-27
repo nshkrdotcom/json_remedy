@@ -233,7 +233,8 @@ defmodule JsonRemedy.Layer3.CharacterParsers do
       char == "<" and state.expecting == :value and
           HtmlHandlers.is_html_start?(content, state.position) ->
         # Start of HTML content - quote it
-        {html_iolist, chars_consumed, repairs} = HtmlHandlers.process_html_iolist(content, state)
+        {html_iolist, chars_consumed, _bytes_consumed, repairs} =
+          HtmlHandlers.process_html_iolist(content, state)
 
         %{
           state
@@ -373,7 +374,8 @@ defmodule JsonRemedy.Layer3.CharacterParsers do
       char == "<" and state.expecting == :value and
           HtmlHandlers.is_html_start?(content, state.position) ->
         # Start of HTML content - quote it
-        {html_string, chars_consumed, repairs} = HtmlHandlers.process_html_string(content, state)
+        {html_string, chars_consumed, _bytes_consumed, repairs} =
+          HtmlHandlers.process_html_string(content, state)
 
         %{
           state

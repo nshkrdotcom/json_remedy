@@ -18,11 +18,13 @@ examples=(
   "examples/basic_usage.exs"
   "examples/hardcoded_patterns_examples.exs"
   "examples/html_content_examples.exs"
+  "examples/html_metadata_examples.exs"
   "examples/performance_benchmarks.exs"
   "examples/quick_performance.exs"
   "examples/real_world_scenarios.exs"
   "examples/repair_example.exs"
   "examples/simple_stress_test.exs"
+  "examples/windows_ci_examples.exs"
 )
 
 # Run each example

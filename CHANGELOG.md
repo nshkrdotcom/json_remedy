@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.8] - 2025-10-27
+
+### Added
+- **HTML metadata**: `HtmlHandlers.extract_html_content/2` now returns byte counts alongside grapheme totals so every caller gets accurate offsets without recomputing (#6).
+- **Examples**: New `html_metadata_examples.exs` and `windows_ci_examples.exs` scripts document the metadata workflow and Windows CI parity (#6, #7).
+
+### Fixed
+- **Syntax normalization**: Layer 3 consumes the shared metadata directly, removing duplicated byte math around HTML quoting (#6).
+
+### CI
+- **Windows coverage**: Introduced a `windows-latest` PowerShell job to the GitHub Actions matrix to run `mix deps.get`, `mix compile --warnings-as-errors`, and `mix test`, ensuring CRLF regressions are caught ahead of releases (#7).
+
 ## [0.1.7] - 2025-10-27
 
 ### Fixed
@@ -328,7 +340,8 @@ This is a **100% rewrite** - all previous code has been replaced with the new la
 - Minimal memory overhead (< 8KB for repairs)
 - All operations pass performance thresholds
 
-[Unreleased]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.7...HEAD
+[Unreleased]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.8...HEAD
+[0.1.8]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.4...v0.1.5

@@ -806,25 +806,18 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
           HtmlHandlers.is_html_start?(<<char::utf8, rest::binary>>, 0) ->
         # Start of HTML content - quote it
         fragment = <<char::utf8, rest::binary>>
-        {html_content, chars_consumed} = HtmlHandlers.extract_html_content(fragment, 0)
+
+        {html_content, chars_consumed, bytes_consumed} =
+          HtmlHandlers.extract_html_content(fragment, 0)
 
         {quoted_html, html_repairs} = HtmlHandlers.quote_html_content(html_content, pos)
 
-        consumed_fragment = String.slice(fragment, 0, chars_consumed)
-        bytes_consumed = byte_size(consumed_fragment)
-        bytes_for_rest = max(bytes_consumed - byte_size(<<char::utf8>>), 0)
+        fragment_size = byte_size(fragment)
 
         remaining =
-          if bytes_for_rest <= 0 do
-            rest
-          else
-            rest_size = byte_size(rest)
-
-            if bytes_for_rest >= rest_size do
-              <<>>
-            else
-              binary_part(rest, bytes_for_rest, rest_size - bytes_for_rest)
-            end
+          cond do
+            bytes_consumed >= fragment_size -> <<>>
+            true -> binary_part(fragment, bytes_consumed, fragment_size - bytes_consumed)
           end
 
         normalize_syntax_binary_simple(

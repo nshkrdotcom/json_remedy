@@ -37,16 +37,28 @@ defmodule JsonRemedy.Layer3.HtmlHandlers do
 
   @doc """
   Extract HTML content starting from position until we hit a JSON structural delimiter.
-  Returns {html_content, chars_consumed}.
+  Returns {html_content, chars_consumed, bytes_consumed}.
 
   Strategy: Track HTML tag depth. Only stop at JSON delimiters when:
   - We're at HTML tag depth 0 (all tags closed)
   - We're at JSON depth 0 (no nested JSON-like braces)
   - We're not inside an HTML tag marker (between < and >)
   """
-  @spec extract_html_content(String.t(), non_neg_integer()) :: {String.t(), non_neg_integer()}
+  @spec extract_html_content(String.t(), non_neg_integer()) ::
+          {String.t(), non_neg_integer(), non_neg_integer()}
   def extract_html_content(content, start_position) do
     extract_html_content_recursive(content, start_position, start_position, 0, 0, false)
+  end
+
+  defp finalize_html_result(content, start_pos, stop_pos) do
+    length = stop_pos - start_pos
+    raw_html = String.slice(content, start_pos, length)
+    trimmed_html = String.trim_trailing(raw_html)
+
+    chars_consumed = max(length, 0)
+    bytes_consumed = if length <= 0, do: 0, else: byte_size(raw_html)
+
+    {trimmed_html, chars_consumed, bytes_consumed}
   end
 
   # Helper to find end of HTML comment
@@ -96,11 +108,11 @@ defmodule JsonRemedy.Layer3.HtmlHandlers do
          html_depth,
          inside_tag_marker
        ) do
-    if current_pos >= String.length(content) do
+    content_length = String.length(content)
+
+    if current_pos >= content_length do
       # Reached end of content
-      html = String.slice(content, start_pos..-1//1)
-      chars = String.length(html)
-      {String.trim_trailing(html), chars}
+      finalize_html_result(content, start_pos, content_length)
     else
       char = String.at(content, current_pos)
 
@@ -181,9 +193,7 @@ defmodule JsonRemedy.Layer3.HtmlHandlers do
 
         # Stop at JSON delimiters ONLY when all HTML tags are closed
         char in [",", "}", "]"] and json_depth == 0 and html_depth <= 0 and not inside_tag_marker ->
-          html = String.slice(content, start_pos..(current_pos - 1))
-          chars = current_pos - start_pos
-          {String.trim_trailing(html), chars}
+          finalize_html_result(content, start_pos, current_pos)
 
         # Track JSON-like depth (for data attributes with JSON)
         char == "{" and not inside_tag_marker ->
@@ -275,25 +285,27 @@ defmodule JsonRemedy.Layer3.HtmlHandlers do
 
   @doc """
   Process HTML content for IO list version.
-  Returns {html_iolist, chars_consumed, repairs}.
+  Returns {html_iolist, chars_consumed, bytes_consumed, repairs}.
   """
-  @spec process_html_iolist(String.t(), map()) :: {iodata(), non_neg_integer(), list()}
+  @spec process_html_iolist(String.t(), map()) ::
+          {iodata(), non_neg_integer(), non_neg_integer(), list()}
   def process_html_iolist(content, state) do
-    {html, chars_consumed} = extract_html_content(content, state.position)
+    {html, chars_consumed, bytes_consumed} = extract_html_content(content, state.position)
     {quoted_html, repairs} = quote_html_content(html, state.position)
 
-    {quoted_html, chars_consumed, repairs}
+    {quoted_html, chars_consumed, bytes_consumed, repairs}
   end
 
   @doc """
   Process HTML content for regular string version.
-  Returns {html_string, chars_consumed, repairs}.
+  Returns {html_string, chars_consumed, bytes_consumed, repairs}.
   """
-  @spec process_html_string(String.t(), map()) :: {String.t(), non_neg_integer(), list()}
+  @spec process_html_string(String.t(), map()) ::
+          {String.t(), non_neg_integer(), non_neg_integer(), list()}
   def process_html_string(content, state) do
-    {html, chars_consumed} = extract_html_content(content, state.position)
+    {html, chars_consumed, bytes_consumed} = extract_html_content(content, state.position)
     {quoted_html, repairs} = quote_html_content(html, state.position)
 
-    {quoted_html, chars_consumed, repairs}
+    {quoted_html, chars_consumed, bytes_consumed, repairs}
   end
 end

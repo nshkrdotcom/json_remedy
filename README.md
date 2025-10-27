@@ -97,6 +97,7 @@ Runs **before** the main layer pipeline to handle complex patterns that would ot
   - DOCTYPE declarations, comments, void elements
   - Self-closing tags, nested structures
   - Proper escaping of quotes, newlines, special chars
+  - Byte + grapheme metadata for consumer slices *(v0.1.8)*
 
 #### 🔧 **Hardcoded Patterns** *(ported from [json_repair](https://github.com/mangiucugna/json_repair) Python library)*
 Layer 3 includes battle-tested cleanup patterns for edge cases commonly found in LLM output:
@@ -158,7 +159,7 @@ Add JsonRemedy to your `mix.exs`:
 ```elixir
 def deps do
   [
-    {:json_remedy, "~> 0.1.7"}
+    {:json_remedy, "~> 0.1.8"}
   ]
 end
 ```
@@ -302,6 +303,15 @@ Demonstrates handling of unquoted HTML content in JSON values (common when APIs 
 
 This example showcases the HTML detection and quoting capabilities added in v0.1.5, which handle real-world scenarios where API endpoints return HTML error pages instead of JSON.
 
+### 🧮 **HTML Metadata Examples** ✨ *NEW in v0.1.8*
+```bash
+mix run examples/html_metadata_examples.exs
+```
+Inspect the metadata returned when quoting HTML fragments:
+- Grapheme vs byte counts for emoji-rich HTML bodies
+- Byte-accurate offsets from non-zero starting positions
+- Guidance for integrating the metadata into downstream pipelines
+
 ### 🌍 **Real-World Scenarios**
 ```bash
 mix run examples/real_world_scenarios.exs
@@ -335,6 +345,15 @@ Verify reliability under load:
 - Nested structure handling
 - Large array processing
 - Memory usage stability
+
+### 🪟 **Windows CI Examples** ✨ *NEW in v0.1.8*
+```bash
+mix run examples/windows_ci_examples.exs
+```
+Validate the cross-platform pipeline:
+- Confirms the GitHub Actions workflow includes a Windows runner
+- Lists the PowerShell commands executed in CI
+- Helps contributors mirror the job locally when debugging CRLF issues
 
 ### 📊 **Example Output**
 
@@ -1011,6 +1030,9 @@ mix credo --strict              # Code quality
 mix dialyzer                    # Type analysis
 mix format --check-formatted    # Code formatting
 mix test.coverage               # Coverage analysis
+
+# Windows CI parity (PowerShell)
+mix run examples/windows_ci_examples.exs
 
 # Benchmarking
 mix run bench/comprehensive_benchmark.exs
