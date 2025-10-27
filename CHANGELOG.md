@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Syntax normalization**: Layer 3 consumes the shared metadata directly, removing duplicated byte math around HTML quoting (#6).
 
 ### CI
-- **Windows coverage**: Introduced a `windows-latest` PowerShell job to the GitHub Actions matrix to run `mix deps.get`, `mix compile --warnings-as-errors`, and `mix test`, ensuring CRLF regressions are caught ahead of releases (#7).
+- **Windows coverage**: Introduced a `windows-2022` PowerShell job to the GitHub Actions matrix to run `mix deps.get`, `mix compile --warnings-as-errors`, and `mix test`, ensuring CRLF regressions are caught ahead of releases (#7).
 
 ## [0.1.7] - 2025-10-27
 

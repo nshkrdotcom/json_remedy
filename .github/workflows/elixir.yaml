@@ -152,7 +152,7 @@ jobs:
       run: mix test
 
   windows_test:
-    runs-on: windows-latest
+    runs-on: windows-2022
     name: Windows Test on OTP ${{matrix.otp}} / Elixir ${{matrix.elixir}}
     strategy:
       matrix:

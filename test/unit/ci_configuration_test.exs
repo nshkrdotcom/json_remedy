@@ -6,7 +6,7 @@ defmodule JsonRemedy.CIConfigurationTest do
   test "workflow defines a Windows test job" do
     workflow = File.read!(@workflow_path)
 
-    assert workflow =~ "runs-on: windows-latest"
+    assert workflow =~ "runs-on: windows-2022"
     assert workflow =~ "shell: pwsh"
     assert workflow =~ "mix test"
   end

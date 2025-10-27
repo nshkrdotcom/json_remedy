@@ -8,7 +8,7 @@
 defmodule WindowsCIExamples do
   @moduledoc """
   Useful helpers for verifying JsonRemedy's Windows CI coverage:
-  - Confirms the workflow includes a `windows-latest` runner with PowerShell.
+  - Confirms the workflow includes a `windows-2022` runner with PowerShell.
   - Prints the exact commands the CI executes so contributors can mirror them.
   """
 
@@ -28,7 +28,7 @@ defmodule WindowsCIExamples do
     IO.puts("===================================================")
 
     workflow = File.read!(@workflow_path)
-    windows_job_present = String.contains?(workflow, "runs-on: windows-latest")
+    windows_job_present = String.contains?(workflow, "runs-on: windows-2022")
     uses_pwsh = String.contains?(workflow, "shell: pwsh")
 
     IO.puts("Windows runner configured? #{windows_job_present}")
