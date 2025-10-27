@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7] - 2025-10-27
+
+### Fixed
+- **Windows HTML payloads**: Layer 3's binary optimization now trims HTML fragments using byte-accurate offsets, ensuring CRLF-terminated bodies are quoted without leaving stray delimiters.
+- **Regression coverage**: Added a direct regression test mirroring the reporter's `CRLF_html.json` sample so Windows-style newlines stay guarded.
+
+### Added
+- **Examples**: Extended `examples/html_content_examples.exs` with a Windows newline scenario to demonstrate the repaired behaviour via `mix run`.
+- **Documentation**: HexDocs now surfaces grouped README, changelog, and license pages for easier navigation.
+
 ## [0.1.6] - 2025-10-24
 
 ### Added
@@ -297,7 +307,7 @@ This is a **100% rewrite** - all previous code has been replaced with the new la
   - Incomplete objects and arrays
   - Boolean variants (True/False/TRUE/FALSE)
   - Null variants (None/NULL/Null)
-  - Code fence removal (```json blocks)
+  - Code fence removal (triple-backtick `json` fences)
   - Comment stripping (// and /* */)
 - Core API functions:
   - `JsonRemedy.repair/2` - Parse and repair JSON to Elixir terms
@@ -318,7 +328,8 @@ This is a **100% rewrite** - all previous code has been replaced with the new la
 - Minimal memory overhead (< 8KB for repairs)
 - All operations pass performance thresholds
 
-[Unreleased]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.7...HEAD
+[0.1.7]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.3...v0.1.4

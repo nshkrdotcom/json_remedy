@@ -93,6 +93,17 @@ defmodule JsonRemedy.Layer3HtmlContentTest do
       assert String.contains?(result["snippet"], ~s(User said: "Hello World"))
     end
 
+    test "handles HTML with Windows-style newlines" do
+      malformed = ~s(
+        {"responses": [{"id":"33","status":503,"headers":{"Content-Type":"text/html; charset=us-ascii"},"body":<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN""http://www.w3.org/TR/html4/strict.dtd"><HTML><HEAD><TITLE>Service Unavailable</TITLE><META HTTP-EQUIV="Content-Type" Content="text/html; charset=us-ascii"></HEAD><BODY><h2>Application Request Queue Full</h2><hr><p>HTTP Error 503. The application request queue is full.</p>\r\n</BODY></HTML>}]}
+      )
+
+      assert {:ok, result} = JsonRemedy.repair(malformed)
+      [response] = result["responses"]
+      assert String.contains?(response["body"], "\r\n")
+      assert String.contains?(response["body"], "Application Request Queue Full")
+    end
+
     test "handles HTML with special entities" do
       malformed = ~s({"content":<p>Read more &raquo; or &amp; continue</p>})
 

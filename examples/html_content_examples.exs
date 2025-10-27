@@ -32,6 +32,9 @@ defmodule HtmlContentExamples do
     # Example 5: Complex nested HTML with JSON-like content
     example_5_complex_nested_html()
 
+    # Example 6: Windows-style CRLF HTML body
+    example_6_api_503_error_windows()
+
     IO.puts("\n=== All HTML content examples completed! ===")
   end
 
@@ -240,7 +243,32 @@ defmodule HtmlContentExamples do
 
     IO.puts("\n" <> String.duplicate("-", 80) <> "\n")
   end
+
+  defp example_6_api_503_error_windows do
+    IO.puts("Example 6: API 503 Error Page with Windows Newlines")
+    IO.puts("====================================================")
+
+    malformed =
+      ~s({"responses": [{"id":"33","status":503,"headers":{"Content-Type":"text/html; charset=us-ascii"},"body":<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN""http://www.w3.org/TR/html4/strict.dtd"><HTML><HEAD><TITLE>Service Unavailable</TITLE><META HTTP-EQUIV="Content-Type" Content="text/html; charset=us-ascii"></HEAD><BODY><h2>Application Request Queue Full</h2><hr><p>HTTP Error 503. The application request queue is full.</p>\r\n</BODY></HTML>}]} )
+
+    IO.puts("Input (API response with CRLF-terminated HTML body):")
+    IO.puts(String.slice(malformed, 0, 200) <> "...\n")
+
+    case JsonRemedy.repair(malformed) do
+      {:ok, result} ->
+        IO.puts("✓ Successfully repaired!")
+        [response] = result["responses"]
+        IO.puts("\nParsed response:")
+        IO.inspect(response, pretty: true, limit: :infinity)
+        IO.puts("\n✓ HTML body retains CRLF sequence:")
+        IO.puts(String.replace(response["body"], "\r\n", "\\r\\n"))
+
+      {:error, reason} ->
+        IO.puts("✗ Failed to repair: #{reason}")
+    end
+
+    IO.puts("\n" <> String.duplicate("-", 80) <> "\n")
+  end
 end
 
-# Run all examples
 HtmlContentExamples.run_all_examples()

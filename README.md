@@ -158,7 +158,7 @@ Add JsonRemedy to your `mix.exs`:
 ```elixir
 def deps do
   [
-    {:json_remedy, "~> 0.1.6"}
+    {:json_remedy, "~> 0.1.7"}
   ]
 end
 ```

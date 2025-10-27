@@ -1,7 +1,7 @@
 defmodule JsonRemedy.MixProject do
   use Mix.Project
 
-  @version "0.1.6"
+  @version "0.1.7"
   @source_url "https://github.com/nshkrdotcom/json_remedy"
 
   def project do
@@ -11,6 +11,9 @@ defmodule JsonRemedy.MixProject do
       elixir: "~> 1.14",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
+      name: "JsonRemedy",
+      source_url: @source_url,
+      homepage_url: @source_url,
       description:
         "A blazingly fast Elixir library for repairing malformed JSON using binary pattern matching. Handles LLM outputs, legacy data, and broken JSON with intelligent context-aware fixes.",
       package: package(),
@@ -55,18 +58,29 @@ defmodule JsonRemedy.MixProject do
         "GitHub" => @source_url,
         "Documentation" => "https://hexdocs.pm/json_remedy"
       },
-      files: ~w(lib .formatter.exs mix.exs README.md LICENSE assets)
+      files: ~w(lib .formatter.exs mix.exs README.md CHANGELOG.md LICENSE assets)
     ]
   end
 
   defp docs do
     [
-      main: "JsonRemedy",
+      main: "readme",
+      name: "JsonRemedy",
       source_ref: "v#{@version}",
       source_url: @source_url,
+      homepage_url: @source_url,
       assets: %{"assets" => "assets"},
       logo: "assets/json_remedy_logo.svg",
-      extras: ["README.md", "LICENSE"]
+      extras: [
+        {"README.md", [title: "Overview"]},
+        {"CHANGELOG.md", [title: "Changelog"]},
+        {"LICENSE", [title: "License"]}
+      ],
+      groups_for_extras: [
+        "Getting Started": ["README.md"],
+        "Release Notes": ["CHANGELOG.md"],
+        Reference: ["LICENSE"]
+      ]
     ]
   end
 end
