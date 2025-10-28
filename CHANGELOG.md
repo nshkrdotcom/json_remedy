@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.9] - 2025-10-28
+
+### Fixed
+- **Multi-item arrays**: Layer 2 now closes missing braces and brackets between array elements, avoiding mismatched delimiter swaps during comma handling and restoring proper validation (#8).
+
+### Added
+- **Regression coverage**: Added LF and CRLF variants of the reporter's samples to ensure multi-element arrays with missing terminators stay repaired.
+
 ## [0.1.8] - 2025-10-27
 
 ### Added
@@ -340,7 +348,8 @@ This is a **100% rewrite** - all previous code has been replaced with the new la
 - Minimal memory overhead (< 8KB for repairs)
 - All operations pass performance thresholds
 
-[Unreleased]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.8...HEAD
+[Unreleased]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.9...HEAD
+[0.1.9]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.5...v0.1.6

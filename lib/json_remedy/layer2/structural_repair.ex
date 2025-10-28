@@ -137,6 +137,9 @@ defmodule JsonRemedy.Layer2.StructuralRepair do
       "]" ->
         handle_closing_bracket(state, char)
 
+      "," ->
+        handle_comma(state, char)
+
       _ ->
         # Regular character, just add to result
         %{state | result_chars: [char | state.result_chars]}
@@ -288,6 +291,12 @@ defmodule JsonRemedy.Layer2.StructuralRepair do
     end
   end
 
+  @spec handle_comma(state :: state_map(), char :: <<_::8>>) :: state_map()
+  defp handle_comma(state, char) do
+    adjusted_state = maybe_close_contexts_before_separator(state)
+    %{adjusted_state | result_chars: [char | adjusted_state.result_chars]}
+  end
+
   @spec determine_state_from_stack(stack :: [context_frame()]) :: parser_state()
   defp determine_state_from_stack([]), do: :root
   defp determine_state_from_stack([%{type: :brace} | _]), do: :object
@@ -344,29 +353,7 @@ defmodule JsonRemedy.Layer2.StructuralRepair do
       state.context_stack
       |> Enum.reduce({[], []}, fn context_frame, {chars_acc, repairs_acc} ->
         {close_char, repair} =
-          case context_frame.type do
-            :brace ->
-              repair = %{
-                layer: :structural_repair,
-                action: "added missing closing brace",
-                position: state.position + length(chars_acc),
-                original: nil,
-                replacement: "}"
-              }
-
-              {"}", repair}
-
-            :bracket ->
-              repair = %{
-                layer: :structural_repair,
-                action: "added missing closing bracket",
-                position: state.position + length(chars_acc),
-                original: nil,
-                replacement: "]"
-              }
-
-              {"]", repair}
-          end
+          closing_info(context_frame.type, state.position + length(chars_acc))
 
         {[close_char | chars_acc], [repair | repairs_acc]}
       end)
@@ -378,6 +365,98 @@ defmodule JsonRemedy.Layer2.StructuralRepair do
         repairs: state.repairs ++ repairs,
         result_chars: closing_chars ++ state.result_chars
     }
+  end
+
+  @spec maybe_close_contexts_before_separator(state_map()) :: state_map()
+  defp maybe_close_contexts_before_separator(state) do
+    next_char = next_significant_char(state)
+
+    cond do
+      next_char in [nil, "\""] ->
+        state
+
+      requires_array_boundary_closure?(state.context_stack) ->
+        close_contexts_until_array(state)
+
+      true ->
+        state
+    end
+  end
+
+  @spec next_significant_char(state_map()) :: String.t() | nil
+  defp next_significant_char(state) do
+    remaining_length = String.length(state.input) - state.position - 1
+
+    if remaining_length <= 0 do
+      nil
+    else
+      state.input
+      |> String.slice(state.position + 1, remaining_length)
+      |> String.graphemes()
+      |> Enum.find(fn char ->
+        char not in [" ", "\t", "\n", "\r"]
+      end)
+    end
+  end
+
+  @spec requires_array_boundary_closure?([context_frame()]) :: boolean()
+  defp requires_array_boundary_closure?(stack) do
+    case Enum.find_index(stack, &match?(%{type: :bracket}, &1)) do
+      nil -> false
+      0 -> false
+      _ -> true
+    end
+  end
+
+  @spec close_contexts_until_array(state_map()) :: state_map()
+  defp close_contexts_until_array(state) do
+    {to_close, remaining} =
+      Enum.split_while(state.context_stack, fn %{type: type} -> type != :bracket end)
+
+    if Enum.empty?(to_close) do
+      state
+    else
+      {result_chars, repairs} =
+        Enum.with_index(to_close)
+        |> Enum.reduce({state.result_chars, state.repairs}, fn {%{type: type}, idx},
+                                                               {chars_acc, repairs_acc} ->
+          {close_char, repair} = closing_info(type, state.position + idx)
+          {[close_char | chars_acc], [repair | repairs_acc]}
+        end)
+
+      %{
+        state
+        | context_stack: remaining,
+          current_state: determine_state_from_stack(remaining),
+          result_chars: result_chars,
+          repairs: repairs
+      }
+    end
+  end
+
+  @spec closing_info(delimiter_type(), non_neg_integer()) :: {String.t(), repair_action()}
+  defp closing_info(:brace, position) do
+    repair = %{
+      layer: :structural_repair,
+      action: "added missing closing brace",
+      position: position,
+      original: nil,
+      replacement: "}"
+    }
+
+    {"}", repair}
+  end
+
+  defp closing_info(:bracket, position) do
+    repair = %{
+      layer: :structural_repair,
+      action: "added missing closing bracket",
+      position: position,
+      original: nil,
+      replacement: "]"
+    }
+
+    {"]", repair}
   end
 
   # LayerBehaviour callback implementations
