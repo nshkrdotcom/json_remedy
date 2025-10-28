@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.10] - 2025-10-28
+
+### Fixed
+- **Windows structural repairs**: Treat CRLF pairs as whitespace when scanning for the next significant character so Layer 2 keeps nested braces open on Windows-style inputs reported by CI.
+
 ## [0.1.9] - 2025-10-28
 
 ### Fixed
@@ -348,7 +353,8 @@ This is a **100% rewrite** - all previous code has been replaced with the new la
 - Minimal memory overhead (< 8KB for repairs)
 - All operations pass performance thresholds
 
-[Unreleased]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.9...HEAD
+[Unreleased]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.10...HEAD
+[0.1.10]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.6...v0.1.7

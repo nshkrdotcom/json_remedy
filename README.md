@@ -74,7 +74,7 @@ Runs **before** the main layer pipeline to handle complex patterns that would ot
 
 ### 🏗️ **Structural Repairs (Layer 2)**
 - **Missing closing delimiters**: `{"name": "Alice"` → `{"name": "Alice"}`
-- **Array element terminators**: Multi-item arrays recover missing braces/brackets between elements *(v0.1.9)*
+- **Array element terminators**: Multi-item arrays recover missing braces/brackets between elements *(v0.1.10)*
 - **Extra delimiters**: `{"name": "Alice"}}}` → `{"name": "Alice"}`
 - **Mismatched delimiters**: `[{"name": "Alice"}]` → proper structure
 - **Missing opening braces**: `["key": "value"]` → `[{"key": "value"}]`
@@ -160,7 +160,7 @@ Add JsonRemedy to your `mix.exs`:
 ```elixir
 def deps do
   [
-    {:json_remedy, "~> 0.1.9"}
+    {:json_remedy, "~> 0.1.10"}
   ]
 end
 ```
