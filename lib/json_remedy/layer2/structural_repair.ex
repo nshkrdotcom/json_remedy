@@ -394,7 +394,7 @@ defmodule JsonRemedy.Layer2.StructuralRepair do
       |> String.slice(state.position + 1, remaining_length)
       |> String.graphemes()
       |> Enum.find(fn char ->
-        char not in [" ", "\t", "\n", "\r"]
+        char not in [" ", "\t", "\n", "\r", "\r\n"]
       end)
     end
   end
