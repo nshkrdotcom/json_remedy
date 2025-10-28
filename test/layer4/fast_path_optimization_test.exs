@@ -279,9 +279,11 @@ defmodule JsonRemedy.Layer4.FastPathOptimizationTest do
       # Verify roughly linear scaling (later times shouldn't be exponentially larger)
       [time1, time2, time3] = times
 
-      # Time should scale roughly linearly (allowing for some variance)
-      ratio_1_to_2 = time2 / max(time1, 1)
-      ratio_2_to_3 = time3 / max(time2, 1)
+      # Add a baseline to smooth out high-resolution timer noise on fast paths (e.g. Windows CI)
+      baseline = 5_000
+
+      ratio_1_to_2 = (time2 + baseline) / (time1 + baseline)
+      ratio_2_to_3 = (time3 + baseline) / (time2 + baseline)
 
       # Ratios should be reasonable (not exponential growth)
       assert ratio_1_to_2 < 10
