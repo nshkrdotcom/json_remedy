@@ -22,16 +22,18 @@ JsonRemedy - A practical, multi-layered JSON repair library for Elixir that inte
 - ✅ Comment stripping (// and /* */)
 - ✅ Wrapper text extraction (HTML, prose)
 - ✅ Encoding normalization
+- ✅ Trailing dots truncation (`test/unit/layer1_trailing_dots_test.exs`) *(v0.1.11+)*
 
-**Implementation Status**: **TDD COMPLETE** 
-- ✅ Core functionality implemented (21/21 unit tests passing)
+**Implementation Status**: **TDD COMPLETE**
+- ✅ Core functionality implemented (35/35 unit tests passing)
 - ✅ LayerBehaviour contract fully implemented
 - ✅ All required callbacks: `process/2`, `supports?/1`, `priority/0`, `name/0`, `validate_options/1`
-- ✅ Public API functions: `strip_comments/1`, `extract_json_content/1`, `normalize_encoding/1`
+- ✅ Public API functions: `strip_comments/1`, `extract_json_content/1`, `normalize_encoding/1`, `strip_trailing_dots/1`
 - ✅ Context-aware processing that preserves string content
 - ✅ Performance tests passing (4/4 tests, all functions under performance thresholds)
 - ✅ Code quality checks passing (Credo, mix format)
 - ✅ Type specifications and documentation complete
+- ✅ **Trailing dots handling** (v0.1.11): Detects and strips Gemini max_output_tokens truncation pattern
 
 ### Phase 3: Layer 2 - Structural Repair ✅ COMPLETED  
 **Goal**: Fix missing/extra delimiters using state machine for context tracking
@@ -242,7 +244,7 @@ State machine approach preserves JSON semantics:
 - **✅ Production Ready**: Core 3-layer pipeline battle-tested and robust
 
 ### 📊 **Current Statistics**
-- **Total Test Suite**: 449 tests passing, 0 failures (36 excluded)
+- **Total Test Suite**: 660 tests passing, 0 failures (63 excluded)
 - **Critical Tests**: 82 tests passing, 0 failures (19 excluded)
 - **Layer 4 Tests**: 201 tests passing, 0 failures
 - **Unit Tests**: 100+ tests across all layers
@@ -266,10 +268,10 @@ The core 4-layer repair pipeline is **production-ready** and **battle-tested**:
 - **Type Safety Excellence**: Zero Dialyzer warnings with comprehensive type checking
 - **Defensive Programming**: Robust nil input handling throughout the codebase
 - **Code Quality Standards**: Zero warnings, comprehensive documentation, production-ready code
-- **Test Coverage Excellence**: 449 total tests with 100% success rate
+- **Test Coverage Excellence**: 660 total tests with 100% success rate
 
 ## Key Commands
-- `mix test` - Run all tests (449 tests, 0 failures)
+- `mix test` - Run all tests (660 tests, 0 failures)
 - `mix test test/critical` - Run critical test suite (82 tests)
 - `mix test test/layer4` - Run Layer 4 validation tests (201 tests)
 - `mix test test/unit/layer1_content_cleaning_test.exs` - Run Layer 1 tests

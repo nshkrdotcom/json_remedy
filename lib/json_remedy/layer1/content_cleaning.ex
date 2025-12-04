@@ -35,6 +35,7 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
       |> remove_code_fences()
       |> remove_comments()
       |> extract_json_content_internal()
+      |> strip_trailing_dots_internal()
       |> normalize_encoding_internal()
 
     updated_context = %{
@@ -115,6 +116,68 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
       }
 
       {cleaned, existing_repairs ++ [repair]}
+    end
+  end
+
+  @doc """
+  Strip trailing dots from truncated content (Gemini max_output_tokens pattern).
+
+  When LLMs like Gemini hit max_output_tokens, they sometimes fill remaining tokens
+  with dots instead of stopping cleanly. This results in truncated JSON followed
+  by thousands of trailing dots.
+
+  This function detects and strips these trailing dots while preserving:
+  - Dots inside string values
+  - Legitimate ellipsis (...) in content
+  - Valid JSON structure
+  """
+  @spec strip_trailing_dots_internal(input :: {String.t(), [repair_action()]}) ::
+          {String.t(), [repair_action()]}
+  def strip_trailing_dots_internal({input, existing_repairs}) do
+    case strip_trailing_dots(input) do
+      {^input, []} ->
+        # No change needed
+        {input, existing_repairs}
+
+      {cleaned, new_repairs} ->
+        {cleaned, existing_repairs ++ new_repairs}
+    end
+  end
+
+  # Minimum threshold: 10 dots to be considered truncation
+  # This avoids stripping legitimate ellipsis (...) or a few trailing dots
+  @trailing_dots_threshold 10
+
+  @doc """
+  Strip trailing dots from input.
+
+  Public API version that takes string input directly.
+  Detects and removes trailing dots that indicate truncation (10+ consecutive dots).
+  """
+  @spec strip_trailing_dots(input :: String.t()) :: {String.t(), [repair_action()]}
+  def strip_trailing_dots(input) when is_binary(input) do
+    # Find trailing dots pattern: dots (possibly with whitespace/newlines) at end
+    case find_trailing_dots_start(input) do
+      nil ->
+        {input, []}
+
+      {start_pos, dots_count} when dots_count >= @trailing_dots_threshold ->
+        # Strip from the start position to the end
+        cleaned = String.slice(input, 0, start_pos) |> String.trim_trailing()
+
+        repair = %{
+          layer: :content_cleaning,
+          action: "stripped #{dots_count} trailing dots (LLM truncation pattern)",
+          position: start_pos,
+          original: nil,
+          replacement: nil
+        }
+
+        {cleaned, [repair]}
+
+      {_start_pos, _dots_count} ->
+        # Not enough dots to be truncation
+        {input, []}
     end
   end
 
@@ -373,7 +436,7 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
 
     case lines do
       [first_line | rest] ->
-        if is_language_line?(first_line) do
+        if language_line?(first_line) do
           Enum.join(rest, "\n")
         else
           content
@@ -384,7 +447,7 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
     end
   end
 
-  defp is_language_line?(line) do
+  defp language_line?(line) do
     trimmed = String.trim(line)
     language_keywords = ["json", "javascript", "js", "JSON"]
 
@@ -456,7 +519,9 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
         {input, []}
 
       {start_pos, end_pos, _comment_text} ->
-        if not comment_inside_string?(input, start_pos) do
+        if comment_inside_string?(input, start_pos) do
+          {input, []}
+        else
           before =
             if start_pos > 0 do
               binary_part(input, 0, start_pos)
@@ -487,8 +552,6 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
           # Recursively remove more block comments
           {final_result, more_repairs} = remove_block_comments(result)
           {final_result, [repair | more_repairs]}
-        else
-          {input, []}
         end
     end
   end
@@ -548,18 +611,16 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
   defp find_substring_position(string, substring, start_offset) do
     total_size = byte_size(string)
 
-    cond do
-      start_offset >= total_size ->
-        nil
+    if start_offset >= total_size do
+      nil
+    else
+      slice_size = total_size - start_offset
+      slice = binary_part(string, start_offset, slice_size)
 
-      true ->
-        slice_size = total_size - start_offset
-        slice = binary_part(string, start_offset, slice_size)
-
-        case :binary.match(slice, substring) do
-          {match_start, _length} -> start_offset + match_start
-          :nomatch -> nil
-        end
+      case :binary.match(slice, substring) do
+        {match_start, _length} -> start_offset + match_start
+        :nomatch -> nil
+      end
     end
   end
 
@@ -712,7 +773,7 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
   end
 
   # Check if a string is valid JSON (not just starts with valid char)
-  defp is_valid_json_start?(str) do
+  defp valid_json_start?(str) do
     first_char = String.at(str, 0)
 
     # Must start with JSON structure delimiter, not primitives
@@ -775,7 +836,7 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
             # No significant trailing content
             {input, []}
 
-          is_valid_json_start?(after_json_trimmed) ->
+          valid_json_start?(after_json_trimmed) ->
             # The "trailing" content is actually another JSON value (Pattern 1: Multiple JSON)
             # Don't remove it - let it be handled by Layer 5
             {input, []}
@@ -851,5 +912,74 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
     |> String.to_charlist()
     |> Enum.filter(fn char -> char >= 0 and char <= 127 end)
     |> List.to_string()
+  end
+
+  # Trailing dots detection
+  # Finds the start position and count of trailing dots in input
+  # Returns {start_position, dots_count} or nil if no trailing dots found
+  @spec find_trailing_dots_start(String.t()) :: {non_neg_integer(), non_neg_integer()} | nil
+  defp find_trailing_dots_start(input) do
+    # Work backwards from end to find start of trailing dots
+    # Allow whitespace/newlines mixed with dots
+    trimmed = String.trim_trailing(input)
+
+    if trimmed == input do
+      # No trailing whitespace, check for dots directly
+      find_dots_at_end(input)
+    else
+      # Has trailing whitespace, check what's before it
+      case find_dots_at_end(trimmed) do
+        nil ->
+          # No dots before whitespace
+          nil
+
+        {start_pos, dots_count} ->
+          # Found dots, return position in original string
+          {start_pos, dots_count}
+      end
+    end
+  end
+
+  # Find consecutive dots at the end of a string
+  # Returns {start_position, count} or nil
+  @spec find_dots_at_end(String.t()) :: {non_neg_integer(), non_neg_integer()} | nil
+  defp find_dots_at_end(input) do
+    graphemes = String.graphemes(input)
+    len = length(graphemes)
+
+    if len == 0 do
+      nil
+    else
+      # Count dots from end, allowing mixed whitespace/newlines
+      {dots_count, content_end_pos} = count_trailing_dots(Enum.reverse(graphemes), 0, 0, len)
+
+      if dots_count > 0 do
+        {content_end_pos, dots_count}
+      else
+        nil
+      end
+    end
+  end
+
+  # Count trailing dots (with possible whitespace/newlines interspersed)
+  # Returns {dot_count, position_where_content_ends}
+  @spec count_trailing_dots([String.t()], non_neg_integer(), non_neg_integer(), non_neg_integer()) ::
+          {non_neg_integer(), non_neg_integer()}
+  defp count_trailing_dots([], dots_count, _chars_scanned, len), do: {dots_count, len}
+
+  defp count_trailing_dots([char | rest], dots_count, chars_scanned, len) do
+    cond do
+      char == "." ->
+        # Found a dot
+        count_trailing_dots(rest, dots_count + 1, chars_scanned + 1, len)
+
+      char in [" ", "\t", "\n", "\r"] ->
+        # Whitespace is allowed between dots in truncation pattern
+        count_trailing_dots(rest, dots_count, chars_scanned + 1, len)
+
+      true ->
+        # Hit actual content - return what we found
+        {dots_count, len - chars_scanned}
+    end
   end
 end

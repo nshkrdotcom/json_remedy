@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.11] - 2025-12-03
+
+### Added
+- **Trailing dots truncation handling**: Layer 1 now detects and strips trailing dots from truncated JSON content
+  - Pattern: `{"key": "value.............` → `{"key": "value`
+  - Handles Gemini API `max_output_tokens` truncation pattern where remaining tokens are filled with dots
+  - Threshold: 10+ consecutive trailing dots trigger cleanup (preserves legitimate ellipsis)
+  - Works with mixed whitespace/newlines between dots
+  - **Test status**: ✅ 14/14 new tests passing
+- **New public API function**: `ContentCleaning.strip_trailing_dots/1` for direct access to trailing dots removal
+
+### Technical Details
+- **Module**: Enhanced `JsonRemedy.Layer1.ContentCleaning`
+- **New functions**:
+  - `strip_trailing_dots/1` - Public API for trailing dots removal
+  - `strip_trailing_dots_internal/1` - Pipeline integration function
+  - `find_trailing_dots_start/1` - Position detection
+  - `find_dots_at_end/1` - End-of-string dot detection
+  - `count_trailing_dots/4` - Dot counting with whitespace tolerance
+- **Integration**: Runs in Layer 1 pipeline after content extraction, before encoding normalization
+- **Performance**: Grapheme-based processing for proper UTF-8 handling
+
+### Documentation
+- **Test case reference**: Based on real Gemini API response in `docs/20251203/test_case/gemini_max_tokens_trailing_dots.md`
+- **Layer 1 enhancements**: Added trailing dots stripping to content cleaning pipeline
+
 ## [0.1.10] - 2025-10-28
 
 ### Fixed
@@ -353,7 +379,8 @@ This is a **100% rewrite** - all previous code has been replaced with the new la
 - Minimal memory overhead (< 8KB for repairs)
 - All operations pass performance thresholds
 
-[Unreleased]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.10...HEAD
+[Unreleased]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.11...HEAD
+[0.1.11]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.7...v0.1.8

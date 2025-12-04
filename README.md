@@ -46,6 +46,11 @@ Malformed JSON is everywhere in real-world systems:
 ```
 
 ```text
+// Gemini API max_output_tokens truncation (fills rest with dots)
+{"title": "Report", "content": "Analysis of.............................
+```
+
+```text
 // Human input with common mistakes
 {name: Alice, "age": 30, "scores": [95 87 92], active: true,}
 ```
@@ -67,9 +72,12 @@ Runs **before** the main layer pipeline to handle complex patterns that would ot
 ### 🧹 **Content Cleaning (Layer 1)**
 - **Code fences**: ````json ... ```` → clean JSON
 - **Comments**: `// line comments` and `/* block comments */` → removed
-- **Hash comments**: `# python-style comments` → removed  
+- **Hash comments**: `# python-style comments` → removed
 - **Wrapper text**: Extracts JSON from prose, HTML tags, API responses
 - **Trailing text removal**: `[{"id": 1}]\n1 Volume(s) created` → `[{"id": 1}]` *(v0.1.3+)*
+- **Trailing dots truncation**: `{"key": "val............` → `{"key": "val` *(v0.1.11+)*
+  - Handles Gemini API `max_output_tokens` truncation pattern
+  - Strips 10+ consecutive dots while preserving legitimate ellipsis
 - **Encoding normalization**: UTF-8 handling and cleanup
 
 ### 🏗️ **Structural Repairs (Layer 2)**
@@ -160,7 +168,7 @@ Add JsonRemedy to your `mix.exs`:
 ```elixir
 def deps do
   [
-    {:json_remedy, "~> 0.1.10"}
+    {:json_remedy, "~> 0.1.11"}
   ]
 end
 ```
