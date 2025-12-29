@@ -211,6 +211,7 @@ defmodule JsonRemedy.Layer4.FastPathOptimizationTest do
       assert processing_time < 5_000
     end
 
+    @tag :slow
     test "processes arrays with many elements efficiently" do
       large_array = Enum.to_list(1..5000)
       input = Jason.encode!(large_array)
