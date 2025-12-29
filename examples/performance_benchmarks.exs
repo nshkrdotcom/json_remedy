@@ -33,11 +33,13 @@ defmodule PerformanceBenchmarks do
     IO.puts("===================================")
 
     # Valid JSON (should use fast path)
-    valid_json = Jason.encode!(%{
-      "users" => Enum.map(1..100, fn i ->
-        %{"id" => i, "name" => "User #{i}", "active" => true}
-      end)
-    })
+    valid_json =
+      Jason.encode!(%{
+        "users" =>
+          Enum.map(1..100, fn i ->
+            %{"id" => i, "name" => "User #{i}", "active" => true}
+          end)
+      })
 
     # Malformed JSON (requires repair)
     malformed_json = String.replace(valid_json, "\"", "'")
@@ -47,14 +49,16 @@ defmodule PerformanceBenchmarks do
     IO.puts("Testing with 100-user dataset...")
 
     # Test valid JSON (fast path)
-    {time_valid, _} = :timer.tc(fn ->
-      Validation.process(valid_json, context)
-    end)
+    {time_valid, _} =
+      :timer.tc(fn ->
+        Validation.process(valid_json, context)
+      end)
 
     # Test malformed JSON (repair path)
-    {time_malformed, _} = :timer.tc(fn ->
-      SyntaxNormalization.process(malformed_json, context)
-    end)
+    {time_malformed, _} =
+      :timer.tc(fn ->
+        SyntaxNormalization.process(malformed_json, context)
+      end)
 
     IO.puts("Valid JSON (fast path):     #{time_valid}μs")
     IO.puts("Malformed JSON (repair):    #{time_malformed}μs")
@@ -88,21 +92,25 @@ defmodule PerformanceBenchmarks do
       IO.puts("Testing: #{test_name}")
 
       # Test each layer
-      {time1, _} = :timer.tc(fn ->
-        ContentCleaning.process(input, context)
-      end)
+      {time1, _} =
+        :timer.tc(fn ->
+          ContentCleaning.process(input, context)
+        end)
 
-      {time2, _} = :timer.tc(fn ->
-        StructuralRepair.process(input, context)
-      end)
+      {time2, _} =
+        :timer.tc(fn ->
+          StructuralRepair.process(input, context)
+        end)
 
-      {time3, _} = :timer.tc(fn ->
-        SyntaxNormalization.process(input, context)
-      end)
+      {time3, _} =
+        :timer.tc(fn ->
+          SyntaxNormalization.process(input, context)
+        end)
 
-      {time4, _} = :timer.tc(fn ->
-        Validation.process(input, context)
-      end)
+      {time4, _} =
+        :timer.tc(fn ->
+          Validation.process(input, context)
+        end)
 
       IO.puts("  Layer 1: #{time1}μs")
       IO.puts("  Layer 2: #{time2}μs")
@@ -117,18 +125,19 @@ defmodule PerformanceBenchmarks do
     IO.puts("Benchmark 3: Input Size Scaling")
     IO.puts("===============================")
 
-    sizes = [10, 100, 1000, 5000]
+    sizes = [10, 100, 1000]
     context = %{repairs: [], options: []}
 
     for size <- sizes do
       # Generate test data
       malformed = generate_malformed_json(size)
 
-      {time, _} = :timer.tc(fn ->
-        pipeline_process(malformed, context)
-      end)
+      {time, _} =
+        :timer.tc(fn ->
+          pipeline_process(malformed, context)
+        end)
 
-      throughput = (byte_size(malformed) / 1024) / (time / 1_000_000)
+      throughput = byte_size(malformed) / 1024 / (time / 1_000_000)
 
       IO.puts("Size: #{size} objects (#{Float.round(byte_size(malformed) / 1024, 1)} KB)")
       IO.puts("  Time: #{time}μs")
@@ -154,58 +163,69 @@ defmodule PerformanceBenchmarks do
     context = %{repairs: [], options: []}
 
     for {test_name, input} <- test_cases do
-      {time, result} = :timer.tc(fn ->
-        pipeline_process(input, context)
-      end)
+      {time, result} =
+        :timer.tc(fn ->
+          pipeline_process(input, context)
+        end)
 
-      repair_count = case result do
-        {:ok, _, final_context} -> length(final_context.repairs)
-        {:continue, _, final_context} -> length(final_context.repairs)
-        _ -> 0
-      end
+      repair_count =
+        case result do
+          {:ok, _, final_context} -> length(final_context.repairs)
+          {:continue, _, final_context} -> length(final_context.repairs)
+          _ -> 0
+        end
 
       IO.puts("#{test_name}:")
       IO.puts("  Time: #{time}μs")
       IO.puts("  Repairs: #{repair_count}")
-      IO.puts("  Time per repair: #{if repair_count > 0, do: div(time, repair_count), else: "N/A"}μs")
+
+      IO.puts(
+        "  Time per repair: #{if repair_count > 0, do: div(time, repair_count), else: "N/A"}μs"
+      )
+
       IO.puts("")
     end
   end
 
   # Helper function to generate malformed JSON of different sizes
   defp generate_malformed_json(object_count) do
-    objects = Enum.map(1..object_count, fn i ->
-      # Mix various malformed patterns
-      case rem(i, 4) do
-        0 -> ~s|{id: #{i}, name: 'User #{i}', active: True}|
-        1 -> ~s|{"id": #{i}, name: 'User #{i}', active: false,}|
-        2 -> ~s|{id: #{i}, "name": "User #{i}", active: true}|
-        3 -> ~s|{"id": #{i}, name: "User #{i}", active: False}|
-      end
-    end)
+    objects =
+      Enum.map(1..object_count, fn i ->
+        # Mix various malformed patterns
+        case rem(i, 4) do
+          0 -> ~s|{id: #{i}, name: 'User #{i}', active: True}|
+          1 -> ~s|{"id": #{i}, name: 'User #{i}', active: false,}|
+          2 -> ~s|{id: #{i}, "name": "User #{i}", active: true}|
+          3 -> ~s|{"id": #{i}, name: "User #{i}", active: False}|
+        end
+      end)
 
-    "[" <> Enum.join(objects, ", ") <> ",]"  # Add trailing comma
+    # Add trailing comma
+    "[" <> Enum.join(objects, ", ") <> ",]"
   end
 
   # Helper function to process through the full pipeline
   defp pipeline_process(input, context) do
     # Layer 1: Content Cleaning
-    {output, context} = case ContentCleaning.process(input, context) do
-      {:ok, repaired, updated_context} -> {repaired, updated_context}
-      {:error, _reason} -> {input, context}
-    end
+    {output, context} =
+      case ContentCleaning.process(input, context) do
+        {:ok, repaired, updated_context} -> {repaired, updated_context}
+        {:error, _reason} -> {input, context}
+      end
 
     # Layer 2: Structural Repair
-    {output, context} = case StructuralRepair.process(output, context) do
-      {:ok, repaired, updated_context} -> {repaired, updated_context}
-      {:error, _reason} -> {output, context}
-    end
+    {output, context} =
+      case StructuralRepair.process(output, context) do
+        {:ok, repaired, updated_context} -> {repaired, updated_context}
+        {:error, _reason} -> {output, context}
+      end
 
     # Layer 3: Syntax Normalization
-    {output, context} = case SyntaxNormalization.process(output, context) do
-      {:ok, repaired, updated_context} -> {repaired, updated_context}
-      {:error, _reason} -> {output, context}
-    end
+    {output, context} =
+      case SyntaxNormalization.process(output, context) do
+        {:ok, repaired, updated_context} -> {repaired, updated_context}
+        {:error, _reason} -> {output, context}
+      end
 
     # Layer 4: Validation
     Validation.process(output, context)
@@ -231,20 +251,21 @@ defmodule PerformanceBenchmarks do
 
     context = %{repairs: [], options: []}
 
-    Benchee.run(%{
-      "Valid JSON (fast path)" => fn ->
-        Validation.process(valid_json, context)
-      end,
-      "Simple repair" => fn ->
-        SyntaxNormalization.process(malformed_json, context)
-      end,
-      "Full pipeline" => fn ->
-        pipeline_process(malformed_json, context)
-      end
-    },
-    warmup: 2,
-    time: 5,
-    formatters: [Benchee.Formatters.Console]
+    Benchee.run(
+      %{
+        "Valid JSON (fast path)" => fn ->
+          Validation.process(valid_json, context)
+        end,
+        "Simple repair" => fn ->
+          SyntaxNormalization.process(malformed_json, context)
+        end,
+        "Full pipeline" => fn ->
+          pipeline_process(malformed_json, context)
+        end
+      },
+      warmup: 2,
+      time: 5,
+      formatters: [Benchee.Formatters.Console]
     )
   end
 end

@@ -29,15 +29,15 @@ defmodule JsonRemedy.Context.ContextValues do
 
   ## Examples
 
-      iex> JsonRemedy.Context.ContextValues.is_valid_context?(:object_key)
+      iex> JsonRemedy.Context.ContextValues.valid_context?(:object_key)
       true
 
-      iex> JsonRemedy.Context.ContextValues.is_valid_context?(:invalid)
+      iex> JsonRemedy.Context.ContextValues.valid_context?(:invalid)
       false
 
   """
-  @spec is_valid_context?(any()) :: boolean()
-  def is_valid_context?(context) do
+  @spec valid_context?(any()) :: boolean()
+  def valid_context?(context) do
     context in @valid_contexts
   end
 

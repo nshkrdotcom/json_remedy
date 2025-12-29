@@ -329,12 +329,12 @@ defmodule JsonRemedy.Layer4.ValidationTest do
 
     test "handles very large JSON input" do
       # Create a very large but valid JSON
-      large_array = Enum.map(1..10000, fn i -> "item_#{i}" end)
+      large_array = Enum.map(1..10_000, fn i -> "item_#{i}" end)
       input = Jason.encode!(large_array)
       context = %{repairs: [], options: []}
 
       assert {:ok, result, _context} = Validation.process(input, context)
-      assert length(result) == 10000
+      assert length(result) == 10_000
     end
 
     test "handles JSON with maximum nesting depth" do

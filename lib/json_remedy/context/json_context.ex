@@ -171,16 +171,16 @@ defmodule JsonRemedy.Context.JsonContext do
   ## Examples
 
       iex> context = JsonRemedy.Context.JsonContext.new()
-      iex> JsonRemedy.Context.JsonContext.is_in_string?(context)
+      iex> JsonRemedy.Context.JsonContext.in_string?(context)
       false
 
       iex> string_context = JsonRemedy.Context.JsonContext.enter_string(context, "\\"")
-      iex> JsonRemedy.Context.JsonContext.is_in_string?(string_context)
+      iex> JsonRemedy.Context.JsonContext.in_string?(string_context)
       true
 
   """
-  @spec is_in_string?(t()) :: boolean()
-  def is_in_string?(%__MODULE__{in_string: in_string}) do
+  @spec in_string?(t()) :: boolean()
+  def in_string?(%__MODULE__{in_string: in_string}) do
     in_string
   end
 

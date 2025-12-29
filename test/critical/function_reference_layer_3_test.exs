@@ -391,7 +391,7 @@ defmodule JsonRemedy.Layer3.FunctionReferenceTest do
       for rule <- rules do
         assert is_function(rule.processor, 1)
         # Should not raise UndefinedFunctionError
-        {result, repairs} = rule.processor.("{\"test\": \"value\"}")
+        {result, repairs} = rule.processor.(~s({"test": "value"}))
         assert is_binary(result)
         assert is_list(repairs)
       end

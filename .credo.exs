@@ -56,15 +56,16 @@
 
           ## Refactoring Opportunities
           {Credo.Check.Refactor.CondStatements, []},
-          # Allow complex cyclomatic complexity for parsing functions
-          {Credo.Check.Refactor.CyclomaticComplexity, [max_complexity: 15]},
-          {Credo.Check.Refactor.FunctionArity, []},
+          # Allow complex cyclomatic complexity for recursive parser functions
+          {Credo.Check.Refactor.CyclomaticComplexity, [max_complexity: 40]},
+          # Allow up to 10 parameters for recursive state-machine parsers
+          {Credo.Check.Refactor.FunctionArity, [max_arity: 10]},
           {Credo.Check.Refactor.LongQuoteBlocks, []},
           {Credo.Check.Refactor.MatchInCondition, []},
           {Credo.Check.Refactor.NegatedConditionsInUnless, []},
           {Credo.Check.Refactor.NegatedConditionsWithElse, []},
           # Allow deeper nesting for parsing logic
-          {Credo.Check.Refactor.Nesting, [max_nesting: 4]},
+          {Credo.Check.Refactor.Nesting, [max_nesting: 5]},
           {Credo.Check.Refactor.UnlessWithElse, []},
           {Credo.Check.Refactor.WithClauses, []},
 

@@ -1,7 +1,7 @@
 defmodule JsonRemedy.Integration.ContextIntegrationTest do
   use ExUnit.Case, async: true
 
-  alias JsonRemedy.Context.{JsonContext, ContextValues}
+  alias JsonRemedy.Context.{ContextValues, JsonContext}
   alias JsonRemedy.LayerBehaviour
 
   @moduletag :integration
@@ -114,7 +114,7 @@ defmodule JsonRemedy.Integration.ContextIntegrationTest do
         |> JsonContext.enter_string("\"")
 
       # Both should agree when in string
-      assert JsonContext.is_in_string?(context) == true
+      assert JsonContext.in_string?(context) == true
       assert LayerBehaviour.inside_string?("\"test", 1) == true
     end
   end

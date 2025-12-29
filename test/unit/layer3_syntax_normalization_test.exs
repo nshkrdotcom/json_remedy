@@ -251,14 +251,14 @@ defmodule JsonRemedy.Layer3.SyntaxNormalizationTest do
       assert SyntaxNormalization.supports?("{\"active\": True}")
 
       # Should support inputs with trailing commas
-      assert SyntaxNormalization.supports?("{\"name\": \"Alice\",}")
+      assert SyntaxNormalization.supports?(~s({"name": "Alice",}))
 
       # Should support inputs with missing commas
-      assert SyntaxNormalization.supports?("{\"a\": 1 \"b\": 2}")
+      assert SyntaxNormalization.supports?(~s({"a": 1 "b": 2}))
 
       # Should NOT support clean JSON
-      refute SyntaxNormalization.supports?("{\"clean\": \"json\"}")
-      refute SyntaxNormalization.supports?("[1, 2, 3]")
+      refute SyntaxNormalization.supports?(~s({"clean": "json"}))
+      refute SyntaxNormalization.supports?(~s([1, 2, 3]))
 
       # Should NOT support non-string input
       refute SyntaxNormalization.supports?(123)

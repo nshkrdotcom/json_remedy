@@ -96,7 +96,7 @@ defmodule JsonRemedy.CriticalIssuesTestSuite do
 
     test "bounds checking smoke test" do
       # Quick test with edge cases that could cause bounds errors
-      edge_cases = ["", "{", "}", "{'incomplete", String.duplicate("a", 10000)]
+      edge_cases = ["", "{", "}", "{'incomplete", String.duplicate("a", 10_000)]
 
       for input <- edge_cases do
         # Should not crash on any edge case

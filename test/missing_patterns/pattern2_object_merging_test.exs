@@ -9,7 +9,7 @@ defmodule JsonRemedy.MissingPatterns.Pattern2ObjectMergingTest do
 
   Python json_repair handles this in parse_object.py:123-143
 
-  Status: 0/10 tests pass (expected to fail with current implementation)
+  Status: 0/12 tests pass (expected to fail with current implementation)
   """
 
   @moduletag :missing_pattern
@@ -34,6 +34,22 @@ defmodule JsonRemedy.MissingPatterns.Pattern2ObjectMergingTest do
     test "extra pair with missing value" do
       input = ~s|{"key1": "value1"}, "key2": }|
       expected = %{"key1" => "value1", "key2" => ""}
+
+      assert {:ok, result} = JsonRemedy.repair(input)
+      assert result == expected
+    end
+
+    test "ignore empty array after object close" do
+      input = ~s|{"key": "value"}, []|
+      expected = %{"key" => "value"}
+
+      assert {:ok, result} = JsonRemedy.repair(input)
+      assert result == expected
+    end
+
+    test "ignore empty object after object close" do
+      input = ~s|{"key": "value"}, {}|
+      expected = %{"key" => "value"}
 
       assert {:ok, result} = JsonRemedy.repair(input)
       assert result == expected

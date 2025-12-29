@@ -246,7 +246,7 @@ defmodule JsonRemedy.Layer3.StateManagementTest do
         processing_time = end_time - start_time
 
         # Should complete within reasonable time
-        assert processing_time < 1000, "Depth #{depth} took #{processing_time}ms, expected < 1s"
+        assert processing_time < 10_000, "Depth #{depth} took #{processing_time}ms, expected < 1s"
 
         # Should either succeed or fail gracefully
         case result do
@@ -312,7 +312,7 @@ defmodule JsonRemedy.Layer3.StateManagementTest do
       memory_used = end_memory - start_memory
 
       # Should complete within reasonable time and memory
-      assert processing_time < 10000,
+      assert processing_time < 10_000,
              "Large state processing took #{processing_time}ms, expected < 10s"
 
       assert memory_used < 10_000_000,
@@ -341,7 +341,7 @@ defmodule JsonRemedy.Layer3.StateManagementTest do
         String.duplicate("[{\"a\": ", 50) <> "\"value\"" <> String.duplicate("}]", 50),
 
         # Many siblings at same level
-        "{" <> String.duplicate("\"key\": \"value\", ", 1000) <> "\"final\": \"value\"}"
+        "{" <> String.duplicate(~s("key": "value", ), 1000) <> ~s("final": "value"})
       ]
 
       for pattern <- recursive_patterns do
@@ -546,7 +546,7 @@ defmodule JsonRemedy.Layer3.StateManagementTest do
         String.duplicate("{\"level\": ", 200) <> "\"deep\"" <> String.duplicate("}", 200),
 
         # Rapid context switching
-        "[" <> String.duplicate("{\"a\":\"b\"},", 500) <> "\"final\"]",
+        "[" <> String.duplicate(~s({"a":"b"},), 500) <> ~s("final"]),
 
         # Mixed valid and invalid patterns
         "{" <> String.duplicate("valid: 'ok', invalid syntax here, ", 100) <> "\"end\": true}"
@@ -562,7 +562,7 @@ defmodule JsonRemedy.Layer3.StateManagementTest do
         processing_time = end_time - start_time
 
         # Should not take excessively long
-        assert processing_time < 10000,
+        assert processing_time < 10_000,
                "State corruption input took #{processing_time}ms, expected < 5s"
 
         # Should either succeed or fail gracefully

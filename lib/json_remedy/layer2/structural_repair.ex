@@ -26,15 +26,17 @@ defmodule JsonRemedy.Layer2.StructuralRepair do
   @type context_frame :: %{type: delimiter_type(), position: non_neg_integer()}
 
   # More specific state type for the state machine
+  # Use any() for context_stack since Dialyzer has issues with the recursive context_frame type
   @type state_map :: %{
           position: non_neg_integer(),
           current_state: parser_state(),
-          context_stack: [context_frame()],
+          context_stack: list(),
           repairs: [repair_action()],
           in_string: boolean(),
           escape_next: boolean(),
           result_chars: [String.t()],
-          input: String.t()
+          input: String.t(),
+          remaining: binary()
         }
 
   @doc """
@@ -57,7 +59,9 @@ defmodule JsonRemedy.Layer2.StructuralRepair do
       escape_next: false,
       result_chars: [],
       # Store input for look-ahead analysis
-      input: input
+      input: input,
+      # Remaining binary for O(1) lookahead (updated during parsing)
+      remaining: input
     }
 
     # Parse character by character
@@ -81,15 +85,24 @@ defmodule JsonRemedy.Layer2.StructuralRepair do
       {:error, "Layer 2 Structural Repair failed: #{inspect(error)}"}
   end
 
-  @spec parse_string(input :: String.t(), state :: map()) :: map()
+  # O(n) binary pattern matching version - avoids String.graphemes overhead
   defp parse_string(input, state) do
-    input
-    |> String.graphemes()
-    |> Enum.with_index()
-    |> Enum.reduce(state, fn {char, index}, acc_state ->
-      %{acc_state | position: index}
-      |> process_character(char)
-    end)
+    parse_binary(input, state)
+  end
+
+  defp parse_binary(<<>>, state), do: state
+
+  defp parse_binary(<<char::utf8, rest::binary>>, state) do
+    char_str = <<char::utf8>>
+    # remaining stores rest for O(1) lookahead in helper functions
+    current_state = %{state | remaining: rest}
+    processed_state = process_character(current_state, char_str)
+
+    # Only increment position if there are more characters to process
+    # This ensures final position matches the index of the last character processed
+    # (matching original String.graphemes/Enum.with_index behavior)
+    next_pos = if rest == <<>>, do: processed_state.position, else: processed_state.position + 1
+    parse_binary(rest, %{processed_state | position: next_pos})
   end
 
   @spec process_character(state :: map(), char :: String.t()) :: map()
@@ -117,12 +130,12 @@ defmodule JsonRemedy.Layer2.StructuralRepair do
     end
   end
 
-  @spec handle_quote(state :: state_map(), char :: <<_::8>>) :: state_map()
+  @spec handle_quote(state :: map(), char :: binary()) :: map()
   defp handle_quote(state, char) do
     %{state | in_string: not state.in_string, result_chars: [char | state.result_chars]}
   end
 
-  @spec handle_delimiter(state :: state_map(), char :: <<_::8>>) :: state_map()
+  @spec handle_delimiter(state :: map(), char :: binary()) :: map()
   defp handle_delimiter(state, char) do
     case char do
       "{" ->
@@ -146,7 +159,6 @@ defmodule JsonRemedy.Layer2.StructuralRepair do
     end
   end
 
-  @spec handle_opening_brace(state :: state_map(), char :: <<_::8>>) :: state_map()
   defp handle_opening_brace(state, char) do
     # Check for extra opening braces (like {{ without any content)
     if extra_opening_delimiter?(state, :brace) do
@@ -172,7 +184,6 @@ defmodule JsonRemedy.Layer2.StructuralRepair do
     end
   end
 
-  @spec handle_opening_bracket(state :: state_map(), char :: <<_::8>>) :: state_map()
   defp handle_opening_bracket(state, char) do
     # Check for extra opening brackets (like [[ without any content)
     if extra_opening_delimiter?(state, :bracket) do
@@ -198,7 +209,6 @@ defmodule JsonRemedy.Layer2.StructuralRepair do
     end
   end
 
-  @spec handle_closing_brace(state :: state_map(), char :: <<_::8>>) :: state_map()
   defp handle_closing_brace(state, char) do
     case state.context_stack do
       # No open context - this is an extra closing brace
@@ -245,7 +255,6 @@ defmodule JsonRemedy.Layer2.StructuralRepair do
     end
   end
 
-  @spec handle_closing_bracket(state :: state_map(), char :: <<_::8>>) :: state_map()
   defp handle_closing_bracket(state, char) do
     case state.context_stack do
       # No open context - this is an extra closing bracket
@@ -271,6 +280,43 @@ defmodule JsonRemedy.Layer2.StructuralRepair do
         }
 
       # Mismatched context (brace opened, bracket closed)
+      [%{type: :brace} = brace_frame, %{type: :bracket} | rest] ->
+        if object_content_empty?(state.input, brace_frame.position, state.position) do
+          repair = %{
+            layer: :structural_repair,
+            action: "removed empty object before closing array",
+            position: state.position,
+            original: "{",
+            replacement: ""
+          }
+
+          updated_chars = remove_first_char(state.result_chars, "{")
+
+          %{
+            state
+            | context_stack: rest,
+              current_state: determine_state_from_stack(rest),
+              repairs: [repair | state.repairs],
+              result_chars: ["]" | updated_chars]
+          }
+        else
+          repair = %{
+            layer: :structural_repair,
+            action: "added missing closing brace before closing array",
+            position: state.position,
+            original: nil,
+            replacement: "}"
+          }
+
+          %{
+            state
+            | context_stack: rest,
+              current_state: determine_state_from_stack(rest),
+              repairs: [repair | state.repairs],
+              result_chars: ["]", "}" | state.result_chars]
+          }
+        end
+
       [%{type: :brace} | rest] ->
         # For mismatches, fix the closer to match the opener (object stays object)
         repair = %{
@@ -291,59 +337,45 @@ defmodule JsonRemedy.Layer2.StructuralRepair do
     end
   end
 
-  @spec handle_comma(state :: state_map(), char :: <<_::8>>) :: state_map()
   defp handle_comma(state, char) do
     adjusted_state = maybe_close_contexts_before_separator(state)
     %{adjusted_state | result_chars: [char | adjusted_state.result_chars]}
   end
 
-  @spec determine_state_from_stack(stack :: [context_frame()]) :: parser_state()
+  @spec determine_state_from_stack(stack :: list()) :: parser_state()
   defp determine_state_from_stack([]), do: :root
   defp determine_state_from_stack([%{type: :brace} | _]), do: :object
   defp determine_state_from_stack([%{type: :bracket} | _]), do: :array
 
-  @spec extra_opening_delimiter?(state :: state_map(), delimiter_type :: delimiter_type()) ::
-          boolean()
   defp extra_opening_delimiter?(state, delimiter_type) do
     case state.context_stack do
       # Check if we have consecutive same delimiters
       [%{type: ^delimiter_type, position: pos} | _] when state.position - pos == 1 ->
-        # Look ahead to see if this is likely redundant
+        # Look ahead to see if this is likely redundant using O(1) binary access
         # Redundant patterns:
         # - [[simple_content]] (no comma at top level)
         # - {{simple_content}} (no comma at top level)
         # Valid patterns:
         # - [[item1], [item2]] (comma at top level)
         # - [{item1}, {item2}] (comma at top level)
-
-        remaining_input =
-          String.slice(state.input, state.position + 1, String.length(state.input))
-
-        appears_redundant?(remaining_input, delimiter_type)
+        appears_redundant_binary?(state.remaining, delimiter_type)
 
       _ ->
         false
     end
   end
 
-  @spec appears_redundant?(input :: String.t(), delimiter_type :: delimiter_type()) :: boolean()
-  defp appears_redundant?(input, delimiter_type) do
-    # Simple heuristic: if there's no comma at the top level of the nested structure,
-    # then the outer delimiter is likely redundant
-    # This is a simplification but should handle the common cases
+  # O(n) binary search for redundant delimiter pattern
+  @spec appears_redundant_binary?(binary(), delimiter_type()) :: boolean()
+  defp appears_redundant_binary?(input, :bracket), do: not contains_binary?(input, "], [")
+  defp appears_redundant_binary?(input, :brace), do: not contains_binary?(input, "}, {")
 
-    case delimiter_type do
-      :bracket ->
-        # Look for pattern like [content] without comma at same level
-        not String.contains?(input, "], [")
+  # O(n) binary contains check - faster than String.contains? for this use case
+  defp contains_binary?(<<>>, _pattern), do: false
+  defp contains_binary?(<<"], [", _::binary>>, "], ["), do: true
+  defp contains_binary?(<<"}, {", _::binary>>, "}, {"), do: true
+  defp contains_binary?(<<_::utf8, rest::binary>>, pattern), do: contains_binary?(rest, pattern)
 
-      :brace ->
-        # Look for pattern like {content} without comma at same level
-        not String.contains?(input, "}, {")
-    end
-  end
-
-  @spec close_unclosed_contexts(state :: state_map()) :: state_map()
   defp close_unclosed_contexts(%{context_stack: []} = state), do: state
 
   defp close_unclosed_contexts(state) do
@@ -367,7 +399,6 @@ defmodule JsonRemedy.Layer2.StructuralRepair do
     }
   end
 
-  @spec maybe_close_contexts_before_separator(state_map()) :: state_map()
   defp maybe_close_contexts_before_separator(state) do
     next_char = next_significant_char(state)
 
@@ -383,23 +414,20 @@ defmodule JsonRemedy.Layer2.StructuralRepair do
     end
   end
 
-  @spec next_significant_char(state_map()) :: String.t() | nil
+  # O(1) amortized - uses remaining binary from state instead of String.slice
   defp next_significant_char(state) do
-    remaining_length = String.length(state.input) - state.position - 1
-
-    if remaining_length <= 0 do
-      nil
-    else
-      state.input
-      |> String.slice(state.position + 1, remaining_length)
-      |> String.graphemes()
-      |> Enum.find(fn char ->
-        char not in [" ", "\t", "\n", "\r", "\r\n"]
-      end)
-    end
+    find_next_significant_binary(state.remaining)
   end
 
-  @spec requires_array_boundary_closure?([context_frame()]) :: boolean()
+  # Binary pattern matching for finding next non-whitespace character
+  defp find_next_significant_binary(<<?\s, rest::binary>>), do: find_next_significant_binary(rest)
+  defp find_next_significant_binary(<<?\t, rest::binary>>), do: find_next_significant_binary(rest)
+  defp find_next_significant_binary(<<?\n, rest::binary>>), do: find_next_significant_binary(rest)
+  defp find_next_significant_binary(<<?\r, rest::binary>>), do: find_next_significant_binary(rest)
+  defp find_next_significant_binary(<<char::utf8, _::binary>>), do: <<char::utf8>>
+  defp find_next_significant_binary(<<>>), do: nil
+
+  @spec requires_array_boundary_closure?(list()) :: boolean()
   defp requires_array_boundary_closure?(stack) do
     case Enum.find_index(stack, &match?(%{type: :bracket}, &1)) do
       nil -> false
@@ -408,7 +436,6 @@ defmodule JsonRemedy.Layer2.StructuralRepair do
     end
   end
 
-  @spec close_contexts_until_array(state_map()) :: state_map()
   defp close_contexts_until_array(state) do
     {to_close, remaining} =
       Enum.split_while(state.context_stack, fn %{type: type} -> type != :bracket end)
@@ -458,6 +485,24 @@ defmodule JsonRemedy.Layer2.StructuralRepair do
 
     {"]", repair}
   end
+
+  defp object_content_empty?(input, open_pos, close_pos) do
+    if close_pos <= open_pos do
+      true
+    else
+      inner = String.slice(input, open_pos + 1, close_pos - open_pos - 1)
+      String.trim(inner) == ""
+    end
+  end
+
+  defp remove_first_char(chars, target), do: remove_first_char(chars, target, [])
+
+  defp remove_first_char([], _target, acc), do: Enum.reverse(acc)
+
+  defp remove_first_char([target | rest], target, acc), do: Enum.reverse(acc) ++ rest
+
+  defp remove_first_char([char | rest], target, acc),
+    do: remove_first_char(rest, target, [char | acc])
 
   # LayerBehaviour callback implementations
 

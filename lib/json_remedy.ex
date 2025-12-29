@@ -25,8 +25,8 @@ defmodule JsonRemedy do
 
       iex> JsonRemedy.repair(~s|{incomplete: "data"|, logging: true)
       {:ok, %{"incomplete" => "data"}, [
-        %{layer: :structural_repair, action: "added missing closing brace", position: 18, original: nil, replacement: "}"},
-        %{layer: :syntax_normalization, action: "quoted unquoted key", position: 1, original: nil, replacement: nil}
+        %{position: 18, action: "added missing closing brace", original: nil, layer: :structural_repair, replacement: "}"},
+        %{position: 1, action: "quoted unquoted key", original: nil, layer: :syntax_normalization, replacement: nil}
       ]}
   """
 
@@ -34,7 +34,12 @@ defmodule JsonRemedy do
   alias JsonRemedy.Layer2.StructuralRepair
   alias JsonRemedy.Layer3.SyntaxNormalization
   alias JsonRemedy.Layer4.Validation
+  alias JsonRemedy.Utils.CodeFenceExtractor
   alias JsonRemedy.Utils.MultipleJsonDetector
+  alias JsonRemedy.Utils.PlainTextDetector
+  alias JsonRemedy.Utils.Preprocessing
+  alias JsonRemedy.Utils.StrictModeValidator
+  alias JsonRemedy.Utils.StructureCoercion
 
   # Type definitions
   @type json_value ::
@@ -47,6 +52,7 @@ defmodule JsonRemedy do
           | {:debug, boolean()}
           | {:jason_options, keyword()}
           | {:fast_path_optimization, boolean()}
+          | {:strict_mode, boolean()}
 
   @doc """
   Repairs malformed JSON and returns the parsed Elixir term.
@@ -60,6 +66,7 @@ defmodule JsonRemedy do
   - `debug: true` - Returns detailed step-by-step debugging information
   - `jason_options: []` - Options to pass to Jason for final parsing
   - `fast_path_optimization: true` - Enable fast path for already valid JSON (default)
+  - `strict_mode: true` - Validate only; do not repair malformed JSON
 
   ## Examples
 
@@ -81,35 +88,47 @@ defmodule JsonRemedy do
     debug = Keyword.get(opts, :debug, false)
     jason_options = Keyword.get(opts, :jason_options, [])
     fast_path = Keyword.get(opts, :fast_path_optimization, true)
+    strict_mode = Keyword.get(opts, :strict_mode, false)
 
-    # If debug is requested, use the debug function
-    if debug do
-      repair_with_debug(json_string, opts)
-    else
-      # Initialize context
-      context = %{
-        repairs: [],
-        options: [
-          jason_options: jason_options,
-          fast_path_optimization: fast_path
-        ],
-        metadata: %{}
-      }
+    cond do
+      strict_mode ->
+        case StrictModeValidator.validate_raw(json_string, jason_options) do
+          {:ok, parsed} ->
+            if logging, do: {:ok, parsed, []}, else: {:ok, parsed}
 
-      # Try fast path first if enabled
-      if fast_path do
-        case Jason.decode(json_string, jason_options) do
-          {:ok, result} ->
-            if logging, do: {:ok, result, []}, else: {:ok, result}
-
-          {:error, _} ->
-            # Fast path failed, use full pipeline
-            process_through_pipeline(json_string, context, logging)
+          {:error, reason} ->
+            {:error, reason}
         end
-      else
-        # Skip fast path, use full pipeline
-        process_through_pipeline(json_string, context, logging)
-      end
+
+      debug ->
+        repair_with_debug(json_string, opts)
+
+      true ->
+        # Initialize context
+        context = %{
+          repairs: [],
+          options: [
+            jason_options: jason_options,
+            fast_path_optimization: fast_path,
+            strict_mode: strict_mode
+          ],
+          metadata: %{}
+        }
+
+        # Try fast path first if enabled
+        if fast_path do
+          case Jason.decode(json_string, jason_options) do
+            {:ok, result} ->
+              if logging, do: {:ok, result, []}, else: {:ok, result}
+
+            {:error, _} ->
+              # Fast path failed, use full pipeline
+              process_through_pipeline(json_string, context, logging)
+          end
+        else
+          # Skip fast path, use full pipeline
+          process_through_pipeline(json_string, context, logging)
+        end
     end
   end
 
@@ -279,6 +298,7 @@ defmodule JsonRemedy do
     start_time = System.monotonic_time(:microsecond)
     jason_options = Keyword.get(opts, :jason_options, [])
     fast_path = Keyword.get(opts, :fast_path_optimization, true)
+    strict_mode = Keyword.get(opts, :strict_mode, false)
 
     # Initialize context with debug tracking
     context = %{
@@ -286,6 +306,7 @@ defmodule JsonRemedy do
       options: [
         jason_options: jason_options,
         fast_path_optimization: fast_path,
+        strict_mode: strict_mode,
         debug: true
       ],
       metadata: %{},
@@ -324,35 +345,47 @@ defmodule JsonRemedy do
   # Private implementation functions
 
   defp process_through_pipeline(input, context, logging) do
-    # Pre-processing: Detect multiple JSON values (Pattern 1)
-    # Must run BEFORE layers because:
-    # - Layer 1 may remove additional JSON as "wrapper text"
-    # - Layer 3 adds commas between ]{ which breaks the pattern
-    enable_multiple_json =
-      Application.get_env(:json_remedy, :enable_multiple_json_aggregation, true)
-
-    if enable_multiple_json do
-      case MultipleJsonDetector.parse_multiple(input) do
-        {:ok, result} when is_list(result) and length(result) > 1 ->
-          # Multiple values detected
-          if logging do
-            {:ok, result, context.repairs}
-          else
-            {:ok, result}
-          end
-
-        _ ->
-          # Single value, continue normal pipeline
-          process_normal_pipeline(input, context, logging)
-      end
+    if PlainTextDetector.plain_text?(input) do
+      if logging, do: {:ok, "", []}, else: {:ok, ""}
     else
-      process_normal_pipeline(input, context, logging)
+      # Pre-processing: Detect multiple JSON values (Pattern 1)
+      # Must run BEFORE layers because:
+      # - Layer 1 may remove additional JSON as "wrapper text"
+      # - Layer 3 adds commas between ]{ which breaks the pattern
+      enable_multiple_json =
+        Application.get_env(:json_remedy, :enable_multiple_json_aggregation, true)
+
+      if enable_multiple_json do
+        case MultipleJsonDetector.parse_multiple(input, context.options) do
+          {:ok, result, true} ->
+            # Multiple values detected - use result directly
+            if logging do
+              {:ok, result, context.repairs}
+            else
+              {:ok, result}
+            end
+
+          {:ok, result, false} when not logging ->
+            # Single value parsed successfully - use result directly (non-logging mode)
+            {:ok, result}
+
+          {:ok, _result, false} ->
+            # Single value - use normal pipeline for repair tracking in logging mode
+            process_normal_pipeline(input, context, logging)
+
+          {:error, _reason} ->
+            # Parsing failed, continue normal pipeline
+            process_normal_pipeline(input, context, logging)
+        end
+      else
+        process_normal_pipeline(input, context, logging)
+      end
     end
   end
 
   defp process_normal_pipeline(input, context, logging) do
     # Pre-processing: Object boundary merging (before Layer 1 to prevent wrapper text removal)
-    {input_after_merge, _merge_repairs} =
+    {input_after_merge, merge_repairs} =
       if Application.get_env(:json_remedy, :enable_object_merging, true) do
         JsonRemedy.Layer3.ObjectMerger.merge_object_boundaries(input)
       else
@@ -361,23 +394,40 @@ defmodule JsonRemedy do
 
     # Pre-processing: Hardcoded patterns (CRITICAL: must run before Layer 2!)
     # This prevents Layer 2 from misinterpreting doubled quotes as unclosed structures
-    input_after_hardcoded =
+    {input_after_hardcoded, hardcoded_repairs} =
       if Application.get_env(:json_remedy, :enable_early_hardcoded_patterns, true) do
-        input_after_merge
-        |> JsonRemedy.Layer3.HardcodedPatterns.normalize_smart_quotes()
-        |> JsonRemedy.Layer3.HardcodedPatterns.fix_doubled_quotes()
+        after_smart_quotes =
+          JsonRemedy.Layer3.HardcodedPatterns.normalize_smart_quotes(input_after_merge)
+
+        after_doubled = JsonRemedy.Layer3.HardcodedPatterns.fix_doubled_quotes(after_smart_quotes)
+
+        after_fence = Preprocessing.extract_code_fence_json_in_string_values(after_doubled)
+
+        {after_unclosed, unclosed_repairs} =
+          fix_unclosed_string_before_delimiter_with_repair(after_fence)
+
+        after_split = Preprocessing.split_truncated_object_key_in_array(after_unclosed)
+
+        {after_split, unclosed_repairs}
       else
-        input_after_merge
+        {input_after_merge, []}
       end
 
+    input_after_structure = StructureCoercion.coerce_object_to_array(input_after_hardcoded)
+
+    # Include preprocessing repairs in context
+    preprocess_repairs = merge_repairs ++ hardcoded_repairs
+    context = %{context | repairs: context.repairs ++ preprocess_repairs}
+
     # Layer 1: Content Cleaning
-    with {:ok, output1, context1} <- ContentCleaning.process(input_after_hardcoded, context),
+    with {:ok, output1, context1} <- ContentCleaning.process(input_after_structure, context),
          # Layer 2: Structural Repair
          {:ok, output2, context2} <- StructuralRepair.process(output1, context1),
          # Layer 3: Syntax Normalization
          {:ok, output3, context3} <- SyntaxNormalization.process(output2, context2),
          # Layer 4: Validation
          {:ok, parsed, final_context} <- Validation.process(output3, context3) do
+      parsed = CodeFenceExtractor.unwrap_json_strings(parsed, final_context.options)
       # Pipeline succeeded
       if logging do
         {:ok, parsed, final_context.repairs}
@@ -385,8 +435,12 @@ defmodule JsonRemedy do
         {:ok, parsed}
       end
     else
-      {:continue, _, _} ->
-        {:error, "Could not repair JSON - all layers processed but validation failed"}
+      {:continue, output, _context} ->
+        if PlainTextDetector.plain_text?(output) do
+          if logging, do: {:ok, "", []}, else: {:ok, ""}
+        else
+          {:error, "Could not repair JSON - all layers processed but validation failed"}
+        end
 
       {:error, reason} ->
         {:error, reason}
@@ -579,5 +633,57 @@ defmodule JsonRemedy do
 
         {{:error, reason}, context, debug_steps ++ [step_info]}
     end
+  end
+
+  # Fix strings that end with } or ] without closing quote, returning repairs
+  # Pattern: "value} should become "value"}
+  # This must run BEFORE Layer 2 to prevent structural repair from adding extra braces
+  # IMPORTANT:
+  # 1. Require at least one char to avoid matching valid JSON like "value"}
+  # 2. Exclude JSON structural chars (: [ ] { }), comma, and whitespace at start
+  # 3. Content must start with a letter (not space or digit) to avoid matching JSON values
+  defp fix_unclosed_string_before_delimiter_with_repair(content) when is_binary(content) do
+    patterns = [
+      # Match "string} at end - content must start with letter, not whitespace/digit
+      {~r/\"([a-zA-Z][^\"\\:\[\]{},]*(?:\\.[^\"\\]*)*)\}(\s*)$/u, "\"\\1\"\\2}"},
+      # Match "string] at end - content must start with letter
+      {~r/\"([a-zA-Z][^\"\\:\[\]{},]*(?:\\.[^\"\\]*)*)\](\s*)$/u, "\"\\1\"\\2]"},
+      # Match "string} followed by more content - content must start with letter
+      {~r/\"([a-zA-Z][^\"\\:\[\]{},]*)\}([,\]\}])/u, "\"\\1\"}\\2"},
+      # Match "string] followed by more content
+      {~r/\"([a-zA-Z][^\"\\:\[\]{},]*)\]([,\]\}])/u, "\"\\1\"]\\2"}
+    ]
+
+    {fixed_content, repair_count} =
+      Enum.reduce(patterns, {content, 0}, fn {pattern, replacement}, {current_content, count} ->
+        if Regex.match?(pattern, current_content) do
+          new_content = String.replace(current_content, pattern, replacement)
+
+          if new_content != current_content do
+            {new_content, count + 1}
+          else
+            {current_content, count}
+          end
+        else
+          {current_content, count}
+        end
+      end)
+
+    repairs =
+      if repair_count > 0 do
+        [
+          %{
+            layer: :preprocessing,
+            action: "added missing closing quote",
+            position: 0,
+            original: nil,
+            replacement: nil
+          }
+        ]
+      else
+        []
+      end
+
+    {fixed_content, repairs}
   end
 end

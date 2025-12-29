@@ -12,8 +12,8 @@ defmodule JsonRemedy.Layer3.HtmlHandlers do
   Check if the current position starts with HTML content.
   Returns true if it looks like HTML (starts with < followed by tag name or !DOCTYPE).
   """
-  @spec is_html_start?(String.t(), non_neg_integer()) :: boolean()
-  def is_html_start?(content, position) do
+  @spec html_start?(String.t(), non_neg_integer()) :: boolean()
+  def html_start?(content, position) do
     remaining = String.slice(content, position..-1//1)
 
     cond do
@@ -85,7 +85,7 @@ defmodule JsonRemedy.Layer3.HtmlHandlers do
   @void_elements ~w(area base br col embed hr img input link meta param source track wbr)
 
   # Check if a tag is a void element by looking at the tag name after <
-  defp is_void_element?(content, tag_start_pos) do
+  defp void_element?(content, tag_start_pos) do
     # Extract tag name (characters after < until space or >)
     remaining = String.slice(content, tag_start_pos..-1//1)
 
@@ -165,7 +165,7 @@ defmodule JsonRemedy.Layer3.HtmlHandlers do
         char == "<" ->
           # Opening tag or self-closing: <tag> or <tag/>
           # Check if it's a void element that doesn't need closing
-          is_void = is_void_element?(content, current_pos)
+          is_void = void_element?(content, current_pos)
           depth_change = if is_void, do: 0, else: 1
 
           extract_html_content_recursive(

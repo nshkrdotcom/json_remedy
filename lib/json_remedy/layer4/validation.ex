@@ -86,13 +86,13 @@ defmodule JsonRemedy.Layer4.Validation do
   Layer 4 runs fourth in the pipeline.
   """
   @impl LayerBehaviour
-  def priority(), do: 4
+  def priority, do: 4
 
   @doc """
   Return a human-readable name for this layer.
   """
   @impl LayerBehaviour
-  def name(), do: "JSON Validation Layer"
+  def name, do: "JSON Validation Layer"
 
   # Private helper functions
 

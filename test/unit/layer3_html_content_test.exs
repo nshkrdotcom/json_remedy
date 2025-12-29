@@ -83,7 +83,7 @@ defmodule JsonRemedy.Layer3HtmlContentTest do
       assert result["report"]["title"] == "Sales Summary"
       assert String.contains?(result["report"]["content"], "$4,500")
       assert String.contains?(result["report"]["content"], "$6,000")
-      assert result["report"]["total"] == 10500
+      assert result["report"]["total"] == 10_500
     end
 
     test "handles HTML with quotes in content" do

@@ -111,7 +111,7 @@ defmodule JsonRemedy.Layer3.SyntaxDetectors do
       char_str == "\"" ->
         check_unquoted_keys(rest, true, false, "\"", pos + 1)
 
-      !in_string && SyntaxHelpers.is_identifier_start(char_str) ->
+      !in_string && SyntaxHelpers.identifier_start?(char_str) ->
         # Found start of identifier outside string, check if it's followed by colon
         case find_colon_after_identifier(content, pos) do
           {:found, _colon_pos} -> true

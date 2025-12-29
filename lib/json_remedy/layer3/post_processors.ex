@@ -109,7 +109,7 @@ defmodule JsonRemedy.Layer3.PostProcessors do
 
       char_str == "," ->
         # Check if this is a trailing comma
-        if is_trailing_comma?(rest) do
+        if trailing_comma?(rest) do
           repair =
             SyntaxHelpers.create_repair("removed trailing comma", "Removed trailing comma", pos)
 
@@ -142,7 +142,7 @@ defmodule JsonRemedy.Layer3.PostProcessors do
   end
 
   # Check if a comma is trailing (followed only by whitespace and closing delimiter)
-  defp is_trailing_comma?(remaining) do
+  defp trailing_comma?(remaining) do
     trimmed = String.trim_leading(remaining)
     String.starts_with?(trimmed, "}") || String.starts_with?(trimmed, "]")
   end
@@ -593,7 +593,7 @@ defmodule JsonRemedy.Layer3.PostProcessors do
 
   defp handle_whitespace_after_key(char_str, rest, state) do
     trimmed_rest = String.trim_leading(rest)
-    is_value_start = is_json_value_start?(trimmed_rest)
+    is_value_start = json_value_start?(trimmed_rest)
     needs_colon = is_value_start && !String.ends_with?(String.trim_trailing(state.acc), ":")
 
     if needs_colon do
@@ -616,7 +616,7 @@ defmodule JsonRemedy.Layer3.PostProcessors do
     end
   end
 
-  defp is_json_value_start?(str) do
+  defp json_value_start?(str) do
     String.starts_with?(str, "\"") ||
       String.starts_with?(str, "'") ||
       (String.length(str) > 0 &&

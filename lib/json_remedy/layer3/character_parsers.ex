@@ -6,9 +6,9 @@ defmodule JsonRemedy.Layer3.CharacterParsers do
   with different optimization strategies (original, IO list, binary).
   """
 
-  alias JsonRemedy.Layer3.SyntaxHelpers
   alias JsonRemedy.Layer3.ContextManager
   alias JsonRemedy.Layer3.HtmlHandlers
+  alias JsonRemedy.Layer3.SyntaxHelpers
 
   @doc """
   Character-by-character parser - UTF-8 safe.
@@ -218,7 +218,7 @@ defmodule JsonRemedy.Layer3.CharacterParsers do
         # Whitespace - preserve but don't change expectations
         %{state | result_iolist: [state.result_iolist, char]}
 
-      SyntaxHelpers.is_identifier_start(char) ->
+      SyntaxHelpers.identifier_start?(char) ->
         # Start of identifier - could be unquoted key, boolean, null, etc.
         IO.puts(
           "🐛 DEBUG: Processing identifier starting with '#{char}' at position #{state.position}"
@@ -231,7 +231,7 @@ defmodule JsonRemedy.Layer3.CharacterParsers do
         process_number_iolist(content, state)
 
       char == "<" and state.expecting == :value and
-          HtmlHandlers.is_html_start?(content, state.position) ->
+          HtmlHandlers.html_start?(content, state.position) ->
         # Start of HTML content - quote it
         {html_iolist, chars_consumed, _bytes_consumed, repairs} =
           HtmlHandlers.process_html_iolist(content, state)
@@ -363,7 +363,7 @@ defmodule JsonRemedy.Layer3.CharacterParsers do
         # Whitespace - preserve but don't change expectations
         %{state | result: state.result <> char}
 
-      SyntaxHelpers.is_identifier_start(char) ->
+      SyntaxHelpers.identifier_start?(char) ->
         # Start of identifier - could be unquoted key, boolean, null, etc.
         process_identifier(content, state)
 
@@ -372,7 +372,7 @@ defmodule JsonRemedy.Layer3.CharacterParsers do
         process_number(content, state)
 
       char == "<" and state.expecting == :value and
-          HtmlHandlers.is_html_start?(content, state.position) ->
+          HtmlHandlers.html_start?(content, state.position) ->
         # Start of HTML content - quote it
         {html_string, chars_consumed, _bytes_consumed, repairs} =
           HtmlHandlers.process_html_string(content, state)

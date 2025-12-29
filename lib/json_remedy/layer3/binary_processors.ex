@@ -253,6 +253,10 @@ defmodule JsonRemedy.Layer3.BinaryProcessors do
     consume_number_with_edge_cases(rest, <<acc::binary, char::utf8>>, count + 1)
   end
 
+  defp consume_number_with_edge_cases(<<?_, rest::binary>>, acc, count) when byte_size(acc) > 0 do
+    consume_number_with_edge_cases(rest, <<acc::binary, ?_>>, count + 1)
+  end
+
   # Consume minus - could be negative number or range (10-20)
   defp consume_number_with_edge_cases(<<?-, rest::binary>>, acc, count) when byte_size(acc) > 0 do
     # Minus after digits could be a range, consume it
@@ -313,125 +317,140 @@ defmodule JsonRemedy.Layer3.BinaryProcessors do
   @spec analyze_and_normalize_number(String.t(), non_neg_integer()) ::
           {String.t(), list()}
   def analyze_and_normalize_number(number_str, pos) do
-    cond do
-      # Empty or just operators - return empty or minimal value
-      number_str in ["", "-", "+", ".", "e", "E"] ->
-        {"", []}
+    if String.contains?(number_str, "_") do
+      cleaned = String.replace(number_str, "_", "")
+      {normalized, repairs} = analyze_and_normalize_number(cleaned, pos)
 
-      # Leading decimal: .25 → 0.25
-      String.starts_with?(number_str, ".") ->
-        normalized = "0" <> number_str
+      repair =
+        SyntaxHelpers.create_repair(
+          "removed numeric underscore",
+          "Removed underscores from number literal",
+          pos
+        )
 
-        repair =
-          SyntaxHelpers.create_repair(
-            "normalized leading decimal",
-            "Prepended 0 to leading decimal: #{number_str} → #{normalized}",
-            pos
-          )
+      {normalized, [repair | repairs]}
+    else
+      cond do
+        # Empty or just operators - return empty or minimal value
+        number_str in ["", "-", "+", ".", "e", "E"] ->
+          {"", []}
 
-        {normalized, [repair]}
-
-      # Negative leading decimal: -.5 → -0.5
-      String.starts_with?(number_str, "-.") ->
-        normalized = "-0" <> String.slice(number_str, 1..-1//1)
-
-        repair =
-          SyntaxHelpers.create_repair(
-            "normalized negative leading decimal",
-            "Prepended 0 to negative leading decimal: #{number_str} → #{normalized}",
-            pos
-          )
-
-        {normalized, [repair]}
-
-      # Fraction: 1/3 → "1/3"
-      String.contains?(number_str, "/") ->
-        quoted = "\"" <> number_str <> "\""
-
-        repair =
-          SyntaxHelpers.create_repair(
-            "converted fraction to string",
-            "Fraction #{number_str} converted to string",
-            pos
-          )
-
-        {quoted, [repair]}
-
-      # Range with dash: 10-20 → "10-20" (but not negative numbers like -20)
-      String.match?(number_str, ~r/^\d+\-\d/) ->
-        quoted = "\"" <> number_str <> "\""
-
-        repair =
-          SyntaxHelpers.create_repair(
-            "converted range to string",
-            "Range #{number_str} converted to string",
-            pos
-          )
-
-        {quoted, [repair]}
-
-      # Multiple decimal points: 1.1.1 → "1.1.1"
-      String.split(number_str, ".") |> length() > 2 ->
-        quoted = "\"" <> number_str <> "\""
-
-        repair =
-          SyntaxHelpers.create_repair(
-            "converted invalid decimal to string",
-            "Invalid decimal format #{number_str} converted to string",
-            pos
-          )
-
-        {quoted, [repair]}
-
-      # Trailing operators: trim them (CHECK BEFORE text-number hybrid!)
-      # 1e → 1, 1. → 1.0, 1e- → 1
-      String.ends_with?(number_str, ["e", "E", "e-", "E-", "e+", "E+"]) ->
-        normalized = number_str |> String.replace(~r/[eE][\+\-]?$/, "")
-
-        repair =
-          SyntaxHelpers.create_repair(
-            "removed trailing exponent operator",
-            "Removed incomplete exponent from #{number_str} → #{normalized}",
-            pos
-          )
-
-        {normalized, [repair]}
-
-      # Text-number hybrid: has letters after digits → "1abc"
-      # Must come AFTER trailing operator check to avoid matching "1e"
-      String.match?(number_str, ~r/\d.*[a-zA-Z]/) or String.match?(number_str, ~r/[^\d\.\-\+eE]/) ->
-        quoted = "\"" <> number_str <> "\""
-
-        repair =
-          SyntaxHelpers.create_repair(
-            "converted text-number hybrid to string",
-            "Text-number hybrid #{number_str} converted to string",
-            pos
-          )
-
-        {quoted, [repair]}
-
-      String.ends_with?(number_str, ".") ->
-        # Check if there are digits before the dot
-        if String.match?(number_str, ~r/^\-?\d+\.$/) do
-          normalized = number_str <> "0"
+        # Leading decimal: .25 → 0.25
+        String.starts_with?(number_str, ".") ->
+          normalized = "0" <> number_str
 
           repair =
             SyntaxHelpers.create_repair(
-              "completed trailing decimal",
-              "Added 0 after trailing decimal: #{number_str} → #{normalized}",
+              "normalized leading decimal",
+              "Prepended 0 to leading decimal: #{number_str} → #{normalized}",
               pos
             )
 
           {normalized, [repair]}
-        else
-          # Just a dot, invalid
-          {"", []}
-        end
 
-      # Valid number - return as-is
-      true ->
-        {number_str, []}
+        # Negative leading decimal: -.5 → -0.5
+        String.starts_with?(number_str, "-.") ->
+          normalized = "-0" <> String.slice(number_str, 1..-1//1)
+
+          repair =
+            SyntaxHelpers.create_repair(
+              "normalized negative leading decimal",
+              "Prepended 0 to negative leading decimal: #{number_str} → #{normalized}",
+              pos
+            )
+
+          {normalized, [repair]}
+
+        # Fraction: 1/3 → "1/3"
+        String.contains?(number_str, "/") ->
+          quoted = "\"" <> number_str <> "\""
+
+          repair =
+            SyntaxHelpers.create_repair(
+              "converted fraction to string",
+              "Fraction #{number_str} converted to string",
+              pos
+            )
+
+          {quoted, [repair]}
+
+        # Range with dash: 10-20 → "10-20" (but not negative numbers like -20)
+        String.match?(number_str, ~r/^\d+\-\d/) ->
+          quoted = "\"" <> number_str <> "\""
+
+          repair =
+            SyntaxHelpers.create_repair(
+              "converted range to string",
+              "Range #{number_str} converted to string",
+              pos
+            )
+
+          {quoted, [repair]}
+
+        # Multiple decimal points: 1.1.1 → "1.1.1"
+        String.split(number_str, ".") |> length() > 2 ->
+          quoted = "\"" <> number_str <> "\""
+
+          repair =
+            SyntaxHelpers.create_repair(
+              "converted invalid decimal to string",
+              "Invalid decimal format #{number_str} converted to string",
+              pos
+            )
+
+          {quoted, [repair]}
+
+        # Trailing operators: trim them (CHECK BEFORE text-number hybrid!)
+        # 1e → 1, 1. → 1.0, 1e- → 1
+        String.ends_with?(number_str, ["e", "E", "e-", "E-", "e+", "E+"]) ->
+          normalized = number_str |> String.replace(~r/[eE][\+\-]?$/, "")
+
+          repair =
+            SyntaxHelpers.create_repair(
+              "removed trailing exponent operator",
+              "Removed incomplete exponent from #{number_str} → #{normalized}",
+              pos
+            )
+
+          {normalized, [repair]}
+
+        # Text-number hybrid: has letters after digits → "1abc"
+        # Must come AFTER trailing operator check to avoid matching "1e"
+        String.match?(number_str, ~r/\d.*[a-zA-Z]/) or
+            String.match?(number_str, ~r/[^\d\.\-\+eE]/) ->
+          quoted = "\"" <> number_str <> "\""
+
+          repair =
+            SyntaxHelpers.create_repair(
+              "converted text-number hybrid to string",
+              "Text-number hybrid #{number_str} converted to string",
+              pos
+            )
+
+          {quoted, [repair]}
+
+        String.ends_with?(number_str, ".") ->
+          # Check if there are digits before the dot
+          if String.match?(number_str, ~r/^\-?\d+\.$/) do
+            normalized = number_str <> "0"
+
+            repair =
+              SyntaxHelpers.create_repair(
+                "completed trailing decimal",
+                "Added 0 after trailing decimal: #{number_str} → #{normalized}",
+                pos
+              )
+
+            {normalized, [repair]}
+          else
+            # Just a dot, invalid
+            {"", []}
+          end
+
+        # Valid number - return as-is
+        true ->
+          {number_str, []}
+      end
     end
   end
 

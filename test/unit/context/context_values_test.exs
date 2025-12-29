@@ -14,19 +14,19 @@ defmodule JsonRemedy.Context.ContextValuesTest do
     end
   end
 
-  describe "is_valid_context?/1" do
+  describe "valid_context?/1" do
     test "returns true for valid contexts" do
-      assert ContextValues.is_valid_context?(:root) == true
-      assert ContextValues.is_valid_context?(:object_key) == true
-      assert ContextValues.is_valid_context?(:object_value) == true
-      assert ContextValues.is_valid_context?(:array) == true
+      assert ContextValues.valid_context?(:root) == true
+      assert ContextValues.valid_context?(:object_key) == true
+      assert ContextValues.valid_context?(:object_value) == true
+      assert ContextValues.valid_context?(:array) == true
     end
 
     test "returns false for invalid contexts" do
-      assert ContextValues.is_valid_context?(:invalid) == false
-      assert ContextValues.is_valid_context?(:foo) == false
-      assert ContextValues.is_valid_context?(nil) == false
-      assert ContextValues.is_valid_context?("string") == false
+      assert ContextValues.valid_context?(:invalid) == false
+      assert ContextValues.valid_context?(:foo) == false
+      assert ContextValues.valid_context?(nil) == false
+      assert ContextValues.valid_context?("string") == false
     end
   end
 

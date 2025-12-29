@@ -173,7 +173,7 @@ defmodule JsonRemedy.Context.JsonContextTest do
     end
   end
 
-  describe "is_in_string?/1" do
+  describe "in_string?/1" do
     test "returns true when in string" do
       context = %JsonContext{
         current: :object_value,
@@ -183,13 +183,13 @@ defmodule JsonRemedy.Context.JsonContextTest do
         string_delimiter: "\""
       }
 
-      assert JsonContext.is_in_string?(context) == true
+      assert JsonContext.in_string?(context) == true
     end
 
     test "returns false when not in string" do
       context = JsonContext.new()
 
-      assert JsonContext.is_in_string?(context) == false
+      assert JsonContext.in_string?(context) == false
     end
   end
 

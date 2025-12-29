@@ -214,7 +214,7 @@ defmodule JsonRemedy.Layer3.QuoteProcessors do
     else
       char = String.at(input, new_pos)
 
-      if SyntaxHelpers.is_identifier_start(char) do
+      if SyntaxHelpers.identifier_start?(char) do
         # Found potential unquoted key
         {identifier, chars_consumed} = SyntaxHelpers.consume_identifier(input, new_pos)
         after_identifier_pos = new_pos + chars_consumed
@@ -369,7 +369,7 @@ defmodule JsonRemedy.Layer3.QuoteProcessors do
     else
       char = String.at(input, new_pos)
 
-      if SyntaxHelpers.is_identifier_start(char) do
+      if SyntaxHelpers.identifier_start?(char) do
         # Found potential unquoted key
         {identifier, chars_consumed} = SyntaxHelpers.consume_identifier(input, new_pos)
         after_identifier_pos = new_pos + chars_consumed

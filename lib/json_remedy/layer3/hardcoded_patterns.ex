@@ -209,12 +209,12 @@ defmodule JsonRemedy.Layer3.HardcodedPatterns do
   and position tracking, following the json_repair Python library's parse_string.py
   implementation:
 
-  1. **Symmetric doubled quotes**: `""value""` → `"value"`
-  2. **Asymmetric doubled quotes**: `""value"` or `"value""` → `"value"`
-  3. **Tripled quotes**: `\"""value\"""` → `"value"`
-  4. **Quadruple quotes (empty string)**: `\""""` → `""`
-  5. **Doubled quotes in object keys**: `{""key"": "value"}`
-  6. **Doubled quotes inside string content**: `"He said ""hello"" to me"`
+  1. **Symmetric doubled quotes**: `\"\"value\"\"` → `\"value\"`
+  2. **Asymmetric doubled quotes**: `\"\"value\"` or `\"value\"\"` → `\"value\"`
+  3. **Tripled quotes**: `\"\"\"value\"\"\"` → `\"value\"`
+  4. **Quadruple quotes (empty string)**: `\"\"\"\"` → `\"\"`
+  5. **Doubled quotes in object keys**: `{\"\"key\"\": \"value\"}`
+  6. **Doubled quotes inside string content**: `\"He said \"\"hello\"\" to me\"`
 
   ## Test Coverage
 

@@ -17,6 +17,23 @@ defmodule JsonRemedy.MissingPatterns.NumberEdgeCasesTest do
 
   alias JsonRemedy
 
+  describe "python-style numeric underscores" do
+    test "underscores in integer literal" do
+      input = ~s({"value": 82_461_110})
+      expected = %{"value" => 82_461_110}
+
+      assert {:ok, result} = JsonRemedy.repair(input)
+      assert result == expected
+    end
+
+    test "underscores in float literal" do
+      input = ~s({"value": 1_234.5_6})
+
+      assert {:ok, result} = JsonRemedy.repair(input)
+      assert_in_delta result["value"], 1234.56, 0.0000001
+    end
+  end
+
   describe "fractions as values" do
     test "simple fraction in object value" do
       input = ~s({"key": 1/3})

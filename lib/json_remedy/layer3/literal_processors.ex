@@ -142,7 +142,7 @@ defmodule JsonRemedy.Layer3.LiteralProcessors do
         # Check all possible literal replacements
         case find_matching_literal(input, pos, replacements) do
           {:match, search_token, replacement_token, repair_description} ->
-            if SyntaxHelpers.is_word_boundary(input, pos, search_token) do
+            if SyntaxHelpers.word_boundary?(input, pos, search_token) do
               repair = SyntaxHelpers.create_repair("normalized literal", repair_description, pos)
 
               replace_all_literals_single_pass(

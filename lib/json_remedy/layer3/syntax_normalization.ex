@@ -13,20 +13,20 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
 
   @behaviour JsonRemedy.LayerBehaviour
 
-  alias JsonRemedy.LayerBehaviour
-  alias JsonRemedy.Layer3.SyntaxHelpers
   alias JsonRemedy.Layer3.BinaryProcessors
-  alias JsonRemedy.Layer3.ContextManager
-  alias JsonRemedy.Layer3.PostProcessors
-  alias JsonRemedy.Layer3.SyntaxDetectors
-  alias JsonRemedy.Layer3.LiteralProcessors
-  alias JsonRemedy.Layer3.QuoteProcessors
   alias JsonRemedy.Layer3.CharacterParsers
-  alias JsonRemedy.Layer3.RuleProcessors
+  alias JsonRemedy.Layer3.ContextManager
+  alias JsonRemedy.Layer3.EllipsisFilter
   alias JsonRemedy.Layer3.HardcodedPatterns
   alias JsonRemedy.Layer3.HtmlHandlers
-  alias JsonRemedy.Layer3.EllipsisFilter
   alias JsonRemedy.Layer3.KeywordFilter
+  alias JsonRemedy.Layer3.LiteralProcessors
+  alias JsonRemedy.Layer3.PostProcessors
+  alias JsonRemedy.Layer3.QuoteProcessors
+  alias JsonRemedy.Layer3.RuleProcessors
+  alias JsonRemedy.Layer3.SyntaxDetectors
+  alias JsonRemedy.Layer3.SyntaxHelpers
+  alias JsonRemedy.LayerBehaviour
 
   # Import types from LayerBehaviour
   @type repair_action :: LayerBehaviour.repair_action()
@@ -66,20 +66,18 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
   """
   @spec process(input :: String.t(), context :: repair_context()) :: layer_result()
   def process(input, context) when is_binary(input) and is_map(context) do
-    try do
-      {fixed_content, repairs} = normalize_syntax(input)
+    {fixed_content, repairs} = normalize_syntax(input)
 
-      updated_context = %{
-        repairs: context.repairs ++ repairs,
-        options: context.options,
-        metadata: Map.put(Map.get(context, :metadata, %{}), :layer3_applied, true)
-      }
+    updated_context = %{
+      repairs: context.repairs ++ repairs,
+      options: context.options,
+      metadata: Map.put(Map.get(context, :metadata, %{}), :layer3_applied, true)
+    }
 
-      {:ok, fixed_content, updated_context}
-    rescue
-      error ->
-        {:error, "Layer 3 Syntax Normalization failed: #{inspect(error)}"}
-    end
+    {:ok, fixed_content, updated_context}
+  rescue
+    error ->
+      {:error, "Layer 3 Syntax Normalization failed: #{inspect(error)}"}
   end
 
   # Handle nil or invalid inputs gracefully
@@ -369,6 +367,72 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
     |> String.replace(~r/:\s*]/, ": \"\"]")
   end
 
+  defp fix_missing_quotes_after_string(content) when is_binary(content) do
+    content
+    |> String.replace(
+      ~r/("([^"\\]|\\.)*")\s+([^\s,"\\]\}]+)"/u,
+      "\\1, \"\\3\""
+    )
+    |> String.replace(
+      ~r/("([^"\\]|\\.)*")\s+([^\s,"\\]\}]+)(?=\s*[,\\]\}])/u,
+      "\\1, \"\\3\""
+    )
+  end
+
+  defp fix_code_fence_terminator_in_strings(content) when is_binary(content) do
+    content
+    |> String.replace(~r/\"```(?=[,\]\}]|$)/u, "\"")
+    |> String.replace(~r/\"([^\"\\]*(?:\\.[^\"\\]*)*)\}```/u, "\"\\1\"}")
+    |> String.replace(~r/\"([^\"\\]*(?:\\.[^\"\\]*)*)\]```/u, "\"\\1\"]")
+  end
+
+  # Fix embedded quotes in strings
+  # Pattern: "content1"content2" where content2 starts with a letter
+  # This indicates the quote after content1 is embedded, not a terminator
+  # Example: {"key": "v"alue"} → {"key": "v\"alue\""}
+  defp fix_embedded_quotes_in_strings(content) when is_binary(content) do
+    content
+    # Pattern 1: Object value with double embedded quotes - "text1"text2"}
+    # Matches: ": "v"alue"} or similar
+    |> String.replace(
+      ~r/(:\s*)"([^"\\]*)"([a-zA-Z][^"\\]*)"(\})/u,
+      "\\1\"\\2\\\"\\3\\\"\"\\4"
+    )
+    # Pattern 2: Array value with double embedded quotes - ["text1"text2"]
+    |> String.replace(
+      ~r/([\[\,]\s*)"([^"\\]*)"([a-zA-Z][^"\\]*)"([\]\,])/u,
+      "\\1\"\\2\\\"\\3\\\"\"\\4"
+    )
+    # Pattern 3: Object value with embedded quote followed by comma - "text1"text2",
+    |> String.replace(
+      ~r/(:\s*)"([^"\\]*)"([a-zA-Z][^"\\]*)"(\s*,)/u,
+      "\\1\"\\2\\\"\\3\"\\4"
+    )
+    # Pattern 4: Object value with embedded quote followed by next key - "text1"text2", "key
+    |> String.replace(
+      ~r/(:\s*)"([^"\\]*)"([a-zA-Z][^"\\,]*)",(\s*")/u,
+      "\\1\"\\2\\\"\\3\",\\4"
+    )
+  end
+
+  # Fix strings that end with } or ] without closing quote
+  # Pattern: "value} or "value] should become "value"} or "value"]
+  # IMPORTANT:
+  # 1. Require at least one char to avoid matching valid JSON like "value"}
+  # 2. Exclude JSON structural chars (: [ ] { }), comma, and whitespace at start
+  # 3. Content must start with a letter (not space or digit) to avoid matching JSON values
+  defp fix_unclosed_string_before_delimiter(content) when is_binary(content) do
+    content
+    # Match "string} at end - content must start with letter, not whitespace/digit
+    |> String.replace(~r/\"([a-zA-Z][^\"\\:\[\]{},]*(?:\\.[^\"\\]*)*)\}(\s*)$/u, "\"\\1\"\\2}")
+    # Match "string] at end - content must start with letter
+    |> String.replace(~r/\"([a-zA-Z][^\"\\:\[\]{},]*(?:\\.[^\"\\]*)*)\](\s*)$/u, "\"\\1\"\\2]")
+    # Match "string} followed by more content - content must start with letter
+    |> String.replace(~r/\"([a-zA-Z][^\"\\:\[\]{},]*)\}([,\]\}])/u, "\"\\1\"}\\2")
+    # Match "string] followed by more content
+    |> String.replace(~r/\"([a-zA-Z][^\"\\:\[\]{},]*)\]([,\]\}])/u, "\"\\1\"]\\2")
+  end
+
   # Apply hardcoded pattern preprocessing (ported from Python json_repair)
   defp apply_hardcoded_patterns_preprocessing(content) do
     # Feature flag to enable/disable hardcoded patterns
@@ -390,6 +454,10 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
       content_after_keywords
       # Fix : } or : ] patterns
       |> fix_missing_values()
+      |> fix_missing_quotes_after_string()
+      |> fix_code_fence_terminator_in_strings()
+      |> fix_embedded_quotes_in_strings()
+      |> fix_unclosed_string_before_delimiter()
       |> HardcodedPatterns.normalize_smart_quotes()
       |> HardcodedPatterns.fix_doubled_quotes()
       # NOTE: Escape sequence normalization is intentionally disabled by default
@@ -451,14 +519,28 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
          <<>>,
          result_iolist,
          repairs,
-         _in_string,
+         in_string,
          _escape_next,
          _quote,
          _stack,
          _expecting,
-         _pos
+         pos
        ) do
-    result_string = IO.iodata_to_binary(result_iolist)
+    {final_iolist, final_repairs} =
+      if in_string do
+        repair =
+          create_repair(
+            "added missing closing quote",
+            "Added missing closing quote at end of input",
+            pos
+          )
+
+        {[result_iolist, "\""], [repair | repairs]}
+      else
+        {result_iolist, repairs}
+      end
+
+    result_string = IO.iodata_to_binary(final_iolist)
 
     # Post-process to remove trailing commas and add missing commas
     {comma_processed, comma_repairs} = PostProcessors.post_process_commas(result_string)
@@ -466,7 +548,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
     # Post-process to add missing colons
     {colon_processed, colon_repairs} = PostProcessors.add_missing_colons(comma_processed, [])
 
-    all_repairs = repairs ++ comma_repairs ++ colon_repairs
+    all_repairs = final_repairs ++ comma_repairs ++ colon_repairs
     {colon_processed, all_repairs}
   end
 
@@ -498,6 +580,21 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
           pos + 1
         )
 
+      (in_string && char == ?\\) and quote == "\"" and match?(<<?\', _::binary>>, rest) ->
+        <<?\', rest_after::binary>> = rest
+
+        normalize_syntax_binary_simple(
+          rest_after,
+          [result_iolist, "'"],
+          repairs,
+          in_string,
+          false,
+          quote,
+          stack,
+          expecting,
+          pos + 2
+        )
+
       in_string && char == ?\\ ->
         # Escape character in string
         normalize_syntax_binary_simple(
@@ -513,20 +610,61 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
         )
 
       in_string && char_str == quote ->
-        # End of string - always use double quotes
-        new_expecting = BinaryProcessors.determine_next_expecting_simple(expecting, stack)
+        case rest do
+          <<next::utf8, _::binary>> ->
+            if SyntaxHelpers.identifier_start_char_simple?(next) or
+                 (next >= ?0 and next <= ?9) do
+              repair =
+                create_repair(
+                  "escaped quote in string",
+                  "Escaped quote inside string",
+                  pos
+                )
 
-        normalize_syntax_binary_simple(
-          rest,
-          [result_iolist, "\""],
-          repairs,
-          false,
-          false,
-          nil,
-          stack,
-          new_expecting,
-          pos + 1
-        )
+              normalize_syntax_binary_simple(
+                rest,
+                [result_iolist, "\\\""],
+                [repair | repairs],
+                true,
+                false,
+                quote,
+                stack,
+                expecting,
+                pos + 1
+              )
+            else
+              # End of string - always use double quotes
+              new_expecting = BinaryProcessors.determine_next_expecting_simple(expecting, stack)
+
+              normalize_syntax_binary_simple(
+                rest,
+                [result_iolist, "\""],
+                repairs,
+                false,
+                false,
+                nil,
+                stack,
+                new_expecting,
+                pos + 1
+              )
+            end
+
+          _ ->
+            # End of string - always use double quotes
+            new_expecting = BinaryProcessors.determine_next_expecting_simple(expecting, stack)
+
+            normalize_syntax_binary_simple(
+              rest,
+              [result_iolist, "\""],
+              repairs,
+              false,
+              false,
+              nil,
+              stack,
+              new_expecting,
+              pos + 1
+            )
+        end
 
       in_string ->
         # Regular character inside string - preserve as-is
@@ -686,7 +824,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
           pos + 1
         )
 
-      SyntaxHelpers.is_identifier_start_char_simple(char) ->
+      SyntaxHelpers.identifier_start_char_simple?(char) ->
         # Check if we're expecting a value and might have a multi-word unquoted value
         if expecting == :value do
           # Look ahead to see if this is a multi-word unquoted value
@@ -803,7 +941,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
         )
 
       char == ?< and expecting == :value and
-          HtmlHandlers.is_html_start?(<<char::utf8, rest::binary>>, 0) ->
+          HtmlHandlers.html_start?(<<char::utf8, rest::binary>>, 0) ->
         # Start of HTML content - quote it
         fragment = <<char::utf8, rest::binary>>
 
@@ -815,9 +953,10 @@ defmodule JsonRemedy.Layer3.SyntaxNormalization do
         fragment_size = byte_size(fragment)
 
         remaining =
-          cond do
-            bytes_consumed >= fragment_size -> <<>>
-            true -> binary_part(fragment, bytes_consumed, fragment_size - bytes_consumed)
+          if bytes_consumed >= fragment_size do
+            <<>>
+          else
+            binary_part(fragment, bytes_consumed, fragment_size - bytes_consumed)
           end
 
         normalize_syntax_binary_simple(

@@ -5,11 +5,12 @@ defmodule JsonRemedy.MissingPatterns.Pattern1MultipleJsonTest do
   Test cases for Missing Pattern #1: Multiple JSON Values Aggregation
 
   These tests document a pattern from json_repair Python library that is NOT yet implemented.
-  Expected behavior: Multiple complete JSON values should be wrapped in an array.
+  Expected behavior: Multiple complete JSON values are detected, with empty values ignored
+  and structurally identical updates replacing previous entries.
 
-  Python json_repair handles this in json_parser.py:74-103
+  Python json_repair handles this in json_parser.py:74-103 (see ObjectComparer behavior).
 
-  Status: 0/10 tests pass (expected to fail with current implementation)
+  Status: 0/14 tests pass (expected to fail with current implementation)
   """
 
   @moduletag :missing_pattern
@@ -17,7 +18,15 @@ defmodule JsonRemedy.MissingPatterns.Pattern1MultipleJsonTest do
   describe "multiple JSON values aggregation" do
     test "two empty structures" do
       input = "[]{}"
-      expected = [[], %{}]
+      expected = []
+
+      assert {:ok, result} = JsonRemedy.repair(input)
+      assert result == expected
+    end
+
+    test "empty array followed by object" do
+      input = ~s|[]{"key":"value"}|
+      expected = %{"key" => "value"}
 
       assert {:ok, result} = JsonRemedy.repair(input)
       assert result == expected
@@ -90,6 +99,30 @@ defmodule JsonRemedy.MissingPatterns.Pattern1MultipleJsonTest do
     test "empty and populated structures" do
       input = ~s|{}{"key":"value"}[]|
       expected = [%{}, %{"key" => "value"}, []]
+
+      assert {:ok, result} = JsonRemedy.repair(input)
+      assert result == expected
+    end
+
+    test "object followed by array with boolean literal" do
+      input = ~s|{"key":"value"}[1,2,3,True]|
+      expected = [%{"key" => "value"}, [1, 2, 3, true]]
+
+      assert {:ok, result} = JsonRemedy.repair(input)
+      assert result == expected
+    end
+
+    test "multiple JSON values inside wrapper text" do
+      input = ~s|lorem ```json {"key":"value"} ``` ipsum ```json [1,2,3,True] ``` 42|
+      expected = [%{"key" => "value"}, [1, 2, 3, true]]
+
+      assert {:ok, result} = JsonRemedy.repair(input)
+      assert result == expected
+    end
+
+    test "structurally identical updates replace previous value" do
+      input = ~s|[{"key":"value"}][{"key":"value_after"}]|
+      expected = [%{"key" => "value_after"}]
 
       assert {:ok, result} = JsonRemedy.repair(input)
       assert result == expected

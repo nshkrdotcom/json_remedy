@@ -221,21 +221,21 @@ defmodule JsonRemedy.Layer2.StructuralRepairTest do
   describe "LayerBehaviour implementation" do
     test "supports?/1 detects structural issues" do
       # Should support inputs with missing delimiters
-      assert StructuralRepair.supports?("{\"name\": \"Alice\"")
-      assert StructuralRepair.supports?("[1, 2, 3")
-      assert StructuralRepair.supports?("{\"nested\": {\"inner\": \"value\"")
+      assert StructuralRepair.supports?(~s({"name": "Alice"))
+      assert StructuralRepair.supports?(~s([1, 2, 3))
+      assert StructuralRepair.supports?(~s({"nested": {"inner": "value"))
 
       # Should support inputs with extra delimiters
-      assert StructuralRepair.supports?("{\"name\": \"Alice\"}}")
-      assert StructuralRepair.supports?("[1, 2, 3]]")
+      assert StructuralRepair.supports?(~s({"name": "Alice"}}))
+      assert StructuralRepair.supports?(~s([1, 2, 3]]))
 
       # Should support inputs with mismatched delimiters
-      assert StructuralRepair.supports?("{\"name\": \"Alice\"]")
-      assert StructuralRepair.supports?("[\"item1\", \"item2\"}")
+      assert StructuralRepair.supports?(~s({"name": "Alice"]))
+      assert StructuralRepair.supports?(~s(["item1", "item2"}))
 
       # Should NOT support well-formed JSON
-      refute StructuralRepair.supports?("{\"name\": \"Alice\"}")
-      refute StructuralRepair.supports?("[1, 2, 3]")
+      refute StructuralRepair.supports?(~s({"name": "Alice"}))
+      refute StructuralRepair.supports?(~s([1, 2, 3]))
 
       # Should NOT support non-string input
       refute StructuralRepair.supports?(123)

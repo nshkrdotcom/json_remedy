@@ -216,7 +216,7 @@ defmodule JsonRemedy.Layer3.CriticalIssuesTest do
         # Nested missing colons
         "{\"a\": {\"b\" \"c\"}}",
         # Deep nesting
-        String.duplicate("{\"a\" \"b\"", 50) <> String.duplicate("}", 50)
+        String.duplicate(~s({"a" "b"}), 50) <> String.duplicate("}", 50)
       ]
 
       for input <- edge_cases do

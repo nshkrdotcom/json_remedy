@@ -308,8 +308,8 @@ defmodule JsonRemedy.Layer1.ContentCleaningTest do
       assert ContentCleaning.supports?(long_text)
 
       # Should NOT support clean JSON
-      refute ContentCleaning.supports?("{\"clean\": \"json\"}")
-      refute ContentCleaning.supports?("[1, 2, 3]")
+      refute ContentCleaning.supports?(~s({"clean": "json"}))
+      refute ContentCleaning.supports?(~s([1, 2, 3]))
 
       # Should NOT support non-string input
       refute ContentCleaning.supports?(123)

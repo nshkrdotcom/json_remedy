@@ -291,8 +291,18 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
   # Private helper functions - all using direct string methods instead of regex
 
   # Code Fence Handling
+  # Only treat as code fence if:
+  # 1. Input starts with ``` or `` (after trimming) - proper fence opening
+  # 2. OR has at least 2 occurrences of ``` (opening and closing)
+  # This prevents trailing ``` (LLM truncation artifact) from being treated as fences
   defp has_code_fences?(input) do
-    String.contains?(input, "```")
+    trimmed = String.trim(input)
+    fence_count = length(String.split(input, "```")) - 1
+
+    # Proper code fence: starts with ``` or `` (malformed), or has both opening and closing
+    String.starts_with?(trimmed, "```") or
+      String.starts_with?(trimmed, "``") or
+      fence_count >= 2
   end
 
   defp fence_in_string?(input) do

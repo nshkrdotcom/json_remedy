@@ -7,6 +7,143 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2025-12-28
+
+### Added
+
+#### **Strict Mode Validation**
+New `strict_mode: true` option validates JSON without repairing, rejecting malformed input immediately.
+- **Duplicate key detection**: Rejects objects with repeated keys
+- **Empty key rejection**: Disallows `""` as object keys
+- **Syntax validation**: Requires proper colons, commas, and quoting
+- **Use case**: Validate that upstream sources provide well-formed JSON
+
+```elixir
+JsonRemedy.repair(input, strict_mode: true)
+# => {:ok, parsed} for valid JSON
+# => {:error, "Strict mode: ..."} for any malformation
+```
+
+#### **Plain Text Detection**
+New `PlainTextDetector` module returns empty string for inputs without JSON structure.
+- Pattern: `"lorem ipsum dolor"` → `""`
+- Prevents repair attempts on non-JSON prose
+- Integrated into main pipeline and logging mode
+
+#### **Code Fence Extraction from String Values**
+New `CodeFenceExtractor` module unwraps JSON embedded in code fences within string values.
+- Pattern: `{"key": "```json {\"nested\": 1}```"}` → `{"key": {"nested": 1}}`
+- Handles LLM outputs that wrap JSON responses inside markdown fences
+- Recursive unwrapping for nested structures
+
+#### **Python-Style Numeric Underscores**
+Support for numeric literals with underscore separators.
+- Pattern: `{"value": 82_461_110}` → `{"value": 82461110}`
+- Pattern: `{"value": 1_234.5_6}` → `{"value": 1234.56}`
+- Common in Python, Ruby, and modern JavaScript outputs
+
+#### **Enhanced Preprocessing Pipeline**
+New preprocessing functions run before Layer 1 for improved repair accuracy:
+- **`extract_code_fence_json_in_string_values`**: Extracts JSON from code-fenced string values
+- **`split_truncated_object_key_in_array`**: Handles truncated object keys in array context
+- **`fix_unclosed_string_before_delimiter`**: Adds missing closing quotes before `}` or `]`
+- **`fix_embedded_quotes_in_strings`**: Escapes quotes embedded within string values
+- **`strip_trailing_code_fences`**: Removes LLM truncation artifacts like trailing ` ``` `
+- **`fix_missing_opening_quotes`**: Adds missing opening quotes on values
+
+#### **Structure Coercion**
+New `StructureCoercion` module handles objects without colons.
+- Pattern: `{'key1', 'key2'}` → `["key1", "key2"]`
+- Detects objects that should be arrays based on missing colons
+- Preserves empty objects `{}`
+
+#### **Recent Python json_repair Test Coverage**
+New test file `recent_python_cases_test.exs` covering edge cases from json_repair Python library (2025-06 to 2025-12):
+- Array delimiter and quoting edge cases
+- Object repair edge cases with embedded quotes
+- String parsing edge cases with escaped quotes
+- LLM code fence handling
+- Strict mode parity tests
+
+### Enhanced
+
+#### **Object Merger Rewrite**
+Complete state-machine rewrite of `ObjectMerger` for more accurate object boundary merging:
+- Proper string boundary tracking to avoid false positives
+- Recursive merging for multiple continuation patterns
+- Empty trailing structure detection (`}, []` or `}, {}`)
+- Improved brace balance analysis
+
+#### **Multiple JSON Detector Improvements**
+Enhanced handling of consecutive JSON values:
+- Empty structure filtering: `[]{}` → `[]` (ignores empty trailing structures)
+- Structural update replacement: Same-structure values replace previous
+- Object continuation detection to delegate to ObjectMerger
+- Wrapper text detection for trailing primitive filtering
+
+#### **Layer 2 Performance Optimization**
+O(n) binary pattern matching replaces String.graphemes:
+- **`parse_binary/2`**: Direct binary pattern matching for character iteration
+- **`find_next_significant_binary/1`**: O(1) amortized next-character lookup
+- **`contains_binary?/2`**: O(n) binary search for redundant delimiter detection
+- **`remaining` field**: Tracks remaining binary for O(1) lookahead
+
+#### **Layer 3 Performance Optimizations**
+- **Ellipsis filter**: Single-pass global regex replacement (was recursive)
+- **Keyword filter**: Combined regex patterns (84 ops → 6 ops per input)
+- **Pre-compiled patterns**: Module attributes for regex compilation
+
+#### **Embedded Quote Handling**
+Improved detection and escaping of quotes inside string values:
+- Pattern: `{"key": "v"alue"}` → `{"key": "v\"alue\""}`
+- Handles double embedded quotes in object and array contexts
+- Escaped single quote support: `\'` → `'`
+
+#### **Missing Closing Quote Detection**
+Layer 3 now adds missing closing quotes at end of input:
+- Pattern: `{"key": "unclosed` → `{"key": "unclosed"}`
+- Generates repair action for logging mode
+
+### Changed
+
+#### **API Naming Convention**
+Renamed predicate functions to follow Elixir `?` convention:
+- `is_valid_context?` → `valid_context?`
+- `is_in_string?` → `in_string?`
+- `is_identifier_start` → `identifier_start?`
+- `is_identifier_char` → `identifier_char?`
+- `is_utf8_letter` → `utf8_letter?`
+- `is_number_char` → `number_char?`
+- `is_word_boundary` → `word_boundary?`
+- `is_html_start?` → `html_start?`
+- `is_trailing_comma?` → `trailing_comma?`
+- `is_json_value_start?` → `json_value_start?`
+- `is_void_element?` → `void_element?`
+
+#### **Credo Configuration**
+Relaxed limits for complex recursive parser functions:
+- Cyclomatic complexity: 15 → 40
+- Function arity: default → 10
+- Nesting depth: 4 → 5
+
+### Fixed
+
+- **Code fence detection**: Only treats input as code-fenced if it starts with ` ``` ` or has both opening and closing fences (prevents trailing ` ``` ` truncation artifacts from triggering fence removal)
+- **Empty object in array context**: Removes empty `{}` before `]` instead of adding extra closing brace
+- **Escaped single quotes in strings**: `\'` now properly converts to `'` in output
+- **Logging mode for plain text**: Returns `{:ok, "", []}` instead of error
+
+### Technical Details
+- **New modules**:
+  - JsonRemedy.Utils.StrictModeValidator
+  - JsonRemedy.Utils.PlainTextDetector
+  - JsonRemedy.Utils.CodeFenceExtractor
+  - JsonRemedy.Utils.StructureCoercion
+  - JsonRemedy.Utils.Preprocessing
+  - JsonRemedy.Utils.RepairPipeline
+- **Layer 2 state**: Added `remaining` field for O(1) binary lookahead
+- **Dialyzer**: Suppressed opaque type warnings for MapSet operations in strict mode validator
+
 ## [0.1.11] - 2025-12-03
 
 ### Added
@@ -379,7 +516,8 @@ This is a **100% rewrite** - all previous code has been replaced with the new la
 - Minimal memory overhead (< 8KB for repairs)
 - All operations pass performance thresholds
 
-[Unreleased]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.11...HEAD
+[Unreleased]: https://github.com/nshkrdotcom/json_remedy/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.11...v0.2.0
 [0.1.11]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/nshkrdotcom/json_remedy/compare/v0.1.8...v0.1.9

@@ -7,65 +7,59 @@ defmodule JsonRemedy.Layer3.EllipsisFilter do
   preserving quoted "..." as valid string values.
 
   Based on json_repair Python library (parse_array.py:34-37)
+
+  Performance optimized: Uses global regex replacement in single pass.
   """
 
   alias JsonRemedy.Layer3.SyntaxHelpers
 
+  # Pre-compiled regex patterns for efficiency
+  @only_ellipsis ~r/\[\s*\.\.\.\s*\]/
+  @trailing_ellipsis ~r/,\s*\.\.\.\s*\]/
+  @leading_ellipsis ~r/\[\s*\.\.\.\s*,/
+  @middle_ellipsis ~r/,\s*\.\.\.\s*,/
+  @before_closing ~r/,\s*\.\.\.\s*([}\]])/
+
   @doc """
   Remove unquoted ellipsis patterns from JSON content.
   Returns {filtered_content, repairs}.
+
+  Uses global regex replacement for O(n) single-pass processing.
   """
   @spec filter_ellipsis(String.t() | nil) :: {String.t(), list()}
   def filter_ellipsis(nil), do: {"", []}
   def filter_ellipsis(input) when not is_binary(input), do: {inspect(input), []}
 
   def filter_ellipsis(content) when is_binary(content) do
-    # Match unquoted ... (not inside quotes)
-    # Apply multiple passes to handle all variations
+    # Apply patterns with global replacement in single pass each
     patterns = [
-      # Only ellipsis: [...] → []
-      {~r/\[\s*\.\.\.\s*\]/, "[]"},
-      # Trailing ellipsis: [1, 2, ...] → [1, 2]
-      {~r/,\s*\.\.\.\s*\]/, "]"},
-      # Leading ellipsis: [..., 1, 2] → [1, 2]
-      {~r/\[\s*\.\.\.\s*,/, "["},
-      # Middle ellipsis: [1, ..., 3] → [1, 3]
-      {~r/,\s*\.\.\.\s*,/, ","},
-      # Before closing brace/bracket: ..., } or ..., ]
-      {~r/,\s*\.\.\.\s*([}\]])/, "\\1"}
+      {@only_ellipsis, "[]"},
+      {@trailing_ellipsis, "]"},
+      {@leading_ellipsis, "["},
+      {@middle_ellipsis, ","},
+      {@before_closing, "\\1"}
     ]
 
     {result, repairs} =
       Enum.reduce(patterns, {content, []}, fn {pattern, replacement},
                                               {acc_content, acc_repairs} ->
-        # Keep applying pattern until no more matches (handles multiple occurrences)
-        {final_content, match_count} =
-          apply_pattern_recursively(pattern, replacement, acc_content, 0)
+        if Regex.match?(pattern, acc_content) do
+          # Use global: true for single-pass replacement of all occurrences
+          new_content = Regex.replace(pattern, acc_content, replacement)
 
-        if match_count > 0 do
           repair =
             SyntaxHelpers.create_repair(
               "filtered ellipsis placeholder",
-              "Removed #{match_count} unquoted ... placeholder(s)",
+              "Removed unquoted ... placeholder(s)",
               0
             )
 
-          {final_content, [repair | acc_repairs]}
+          {new_content, [repair | acc_repairs]}
         else
           {acc_content, acc_repairs}
         end
       end)
 
     {result, Enum.reverse(repairs)}
-  end
-
-  # Apply pattern recursively until no more matches
-  defp apply_pattern_recursively(pattern, replacement, content, count) do
-    if Regex.match?(pattern, content) do
-      new_content = Regex.replace(pattern, content, replacement, global: false)
-      apply_pattern_recursively(pattern, replacement, new_content, count + 1)
-    else
-      {content, count}
-    end
   end
 end

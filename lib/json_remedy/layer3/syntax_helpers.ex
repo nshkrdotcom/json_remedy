@@ -9,32 +9,32 @@ defmodule JsonRemedy.Layer3.SyntaxHelpers do
   @doc """
   Check if a character can start an identifier (letter, underscore, or UTF-8).
   """
-  @spec is_identifier_start(String.t()) :: boolean()
-  def is_identifier_start(char) when is_binary(char) do
+  @spec identifier_start?(String.t()) :: boolean()
+  def identifier_start?(char) when is_binary(char) do
     # Support ASCII letters, underscore, and UTF-8 characters
     (char >= "a" && char <= "z") ||
       (char >= "A" && char <= "Z") ||
       char == "_" ||
-      is_utf8_letter(char)
+      utf8_letter?(char)
   end
 
-  def is_identifier_start(_), do: false
+  def identifier_start?(_), do: false
 
   @doc """
   Check if a character can be part of an identifier.
   """
-  @spec is_identifier_char(String.t()) :: boolean()
-  def is_identifier_char(char) when is_binary(char) do
-    is_identifier_start(char) || (char >= "0" && char <= "9") || char == "$"
+  @spec identifier_char?(String.t()) :: boolean()
+  def identifier_char?(char) when is_binary(char) do
+    identifier_start?(char) || (char >= "0" && char <= "9") || char == "$"
   end
 
-  def is_identifier_char(_), do: false
+  def identifier_char?(_), do: false
 
   @doc """
   Check if a character is a UTF-8 letter (simplified approach).
   """
-  @spec is_utf8_letter(String.t()) :: boolean()
-  def is_utf8_letter(char) when is_binary(char) do
+  @spec utf8_letter?(String.t()) :: boolean()
+  def utf8_letter?(char) when is_binary(char) do
     # For UTF-8 characters, we'll be permissive and allow any non-ASCII character
     # that's not a control character or common JSON syntax character
     byte_size(char) > 1 &&
@@ -52,26 +52,26 @@ defmodule JsonRemedy.Layer3.SyntaxHelpers do
       char != "\r"
   end
 
-  def is_utf8_letter(_), do: false
+  def utf8_letter?(_), do: false
 
   @doc """
   Check if a character is part of a number.
   """
-  @spec is_number_char(String.t()) :: boolean()
-  def is_number_char(char) do
+  @spec number_char?(String.t()) :: boolean()
+  def number_char?(char) do
     (char >= "0" && char <= "9") || char in [".", "-", "+", "e", "E"]
   end
 
   @doc """
   Check if a character can start an identifier in binary optimized mode.
   """
-  @spec is_identifier_start_char_simple(integer()) :: boolean()
-  def is_identifier_start_char_simple(char) when char >= ?a and char <= ?z, do: true
-  def is_identifier_start_char_simple(char) when char >= ?A and char <= ?Z, do: true
-  def is_identifier_start_char_simple(?_), do: true
+  @spec identifier_start_char_simple?(integer()) :: boolean()
+  def identifier_start_char_simple?(char) when char >= ?a and char <= ?z, do: true
+  def identifier_start_char_simple?(char) when char >= ?A and char <= ?Z, do: true
+  def identifier_start_char_simple?(?_), do: true
   # Allow UTF-8 characters (> 127) to be part of identifiers
-  def is_identifier_start_char_simple(char) when char > 127, do: true
-  def is_identifier_start_char_simple(_), do: false
+  def identifier_start_char_simple?(char) when char > 127, do: true
+  def identifier_start_char_simple?(_), do: false
 
   @doc """
   Consume whitespace from input and return {whitespace_string, new_position}.
@@ -105,7 +105,7 @@ defmodule JsonRemedy.Layer3.SyntaxHelpers do
   """
   @spec consume_identifier(String.t(), non_neg_integer()) :: {String.t(), non_neg_integer()}
   def consume_identifier(content, start_pos) do
-    consume_while(content, start_pos, &is_identifier_char/1)
+    consume_while(content, start_pos, &identifier_char?/1)
   end
 
   @doc """
@@ -113,7 +113,7 @@ defmodule JsonRemedy.Layer3.SyntaxHelpers do
   """
   @spec consume_number(String.t(), non_neg_integer()) :: {String.t(), non_neg_integer()}
   def consume_number(content, start_pos) do
-    consume_while(content, start_pos, &is_number_char/1)
+    consume_while(content, start_pos, &number_char?/1)
   end
 
   @doc """
@@ -158,8 +158,8 @@ defmodule JsonRemedy.Layer3.SyntaxHelpers do
   @doc """
   Check if a token match is at a word boundary.
   """
-  @spec is_word_boundary(String.t(), non_neg_integer(), String.t()) :: boolean()
-  def is_word_boundary(input, pos, token) do
+  @spec word_boundary?(String.t(), non_neg_integer(), String.t()) :: boolean()
+  def word_boundary?(input, pos, token) do
     token_length = String.length(token)
 
     # Check character before token
@@ -168,7 +168,7 @@ defmodule JsonRemedy.Layer3.SyntaxHelpers do
         true
       else
         prev_char = String.at(input, pos - 1)
-        !is_identifier_char(prev_char)
+        !identifier_char?(prev_char)
       end
 
     # Check character after token
@@ -177,7 +177,7 @@ defmodule JsonRemedy.Layer3.SyntaxHelpers do
         true
       else
         next_char = String.at(input, pos + token_length)
-        !is_identifier_char(next_char)
+        !identifier_char?(next_char)
       end
 
     before_ok && after_ok
