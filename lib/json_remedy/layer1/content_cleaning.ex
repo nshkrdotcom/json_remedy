@@ -6,6 +6,8 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
   - Code fence removal (```json ... ```)
   - Comment stripping (// and /* */)
   - Wrapper text extraction (HTML, prose)
+  - Echoed key removal (Gemini API bug: `{"key": "key": "value"}`)
+  - Trailing dots truncation (Gemini max_output_tokens pattern)
   - Encoding normalization
 
   Uses direct string methods instead of regex for better performance and clearer code.
@@ -35,6 +37,7 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
       |> remove_code_fences()
       |> remove_comments()
       |> extract_json_content_internal()
+      |> strip_echoed_keys_internal()
       |> strip_trailing_dots_internal()
       |> normalize_encoding_internal()
 
@@ -141,6 +144,109 @@ defmodule JsonRemedy.Layer1.ContentCleaning do
 
       {cleaned, new_repairs} ->
         {cleaned, existing_repairs ++ new_repairs}
+    end
+  end
+
+  @doc """
+  Strip echoed/duplicated keys from JSON content (Gemini API bug pattern).
+
+  When Gemini (particularly gemini-2.5-flash-lite) returns structured JSON,
+  it sometimes echoes the key name inside the value:
+
+      {"coach_notes": "coach_notes": "You showed grace under pressure."}
+
+  This function detects and repairs this pattern to produce valid JSON:
+
+      {"coach_notes": "You showed grace under pressure."}
+  """
+  @spec strip_echoed_keys_internal(input :: {String.t(), [repair_action()]}) ::
+          {String.t(), [repair_action()]}
+  def strip_echoed_keys_internal({input, existing_repairs}) do
+    case strip_echoed_keys(input) do
+      {^input, []} ->
+        # No change needed
+        {input, existing_repairs}
+
+      {cleaned, new_repairs} ->
+        {cleaned, existing_repairs ++ new_repairs}
+    end
+  end
+
+  @doc """
+  Strip echoed/duplicated keys from input.
+
+  Public API version that takes string input directly.
+  Detects the Gemini pattern where a key appears twice: once as the key and once
+  echoed at the start of the value.
+
+  ## Examples
+
+      iex> ContentCleaning.strip_echoed_keys(~s|{"key": "key": "value"}|)
+      {~s|{"key": "value"}|, [%{layer: :content_cleaning, action: "removed echoed key 'key'", ...}]}
+
+      iex> ContentCleaning.strip_echoed_keys(~s|{"key": "value"}|)
+      {~s|{"key": "value"}|, []}
+  """
+  @spec strip_echoed_keys(input :: String.t()) :: {String.t(), [repair_action()]}
+  def strip_echoed_keys(input) when is_binary(input) do
+    # Pattern: "key": "key": "value"
+    # We need to find this pattern and remove the echoed "key":
+    # The regex captures: key name, then looks for the same key echoed, then the actual value
+    echoed_key_pattern = ~r/"([^"]+)":\s*"\1":\s*"/
+
+    if Regex.match?(echoed_key_pattern, input) do
+      {result, repairs} = remove_all_echoed_keys(input, [])
+      {result, repairs}
+    else
+      {input, []}
+    end
+  end
+
+  # Remove all echoed key patterns from the input
+  @spec remove_all_echoed_keys(String.t(), [repair_action()]) :: {String.t(), [repair_action()]}
+  defp remove_all_echoed_keys(input, repairs) do
+    # Pattern matches: "key": "key": " and replaces with "key": "
+    # Using a regex that captures the key name and matches its echo
+    echoed_key_pattern = ~r/"([^"]+)":\s*"\1":\s*"/
+
+    case Regex.run(echoed_key_pattern, input, return: :index) do
+      nil ->
+        {input, repairs}
+
+      [{match_start, match_len} | _] ->
+        # Extract the key name for the repair message
+        key_name = extract_echoed_key_name(input, match_start)
+
+        # Build the replacement: "key": " (removing the echoed "key": part)
+        replacement = "\"#{key_name}\": \""
+
+        # Replace this occurrence
+        before = String.slice(input, 0, match_start)
+        after_match = String.slice(input, match_start + match_len, String.length(input))
+        new_input = before <> replacement <> after_match
+
+        repair = %{
+          layer: :content_cleaning,
+          action: "removed echoed key '#{key_name}'",
+          position: match_start,
+          original: String.slice(input, match_start, match_len),
+          replacement: replacement
+        }
+
+        # Continue looking for more echoed keys
+        remove_all_echoed_keys(new_input, repairs ++ [repair])
+    end
+  end
+
+  # Extract the key name from an echoed key pattern at a given position
+  @spec extract_echoed_key_name(String.t(), non_neg_integer()) :: String.t()
+  defp extract_echoed_key_name(input, start_pos) do
+    # The pattern starts with "key", so we need to find the key name
+    substring = String.slice(input, start_pos, 200)
+
+    case Regex.run(~r/^"([^"]+)"/, substring) do
+      [_, key_name] -> key_name
+      _ -> "unknown"
     end
   end
 

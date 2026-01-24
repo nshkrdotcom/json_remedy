@@ -81,7 +81,7 @@ defmodule JsonRemedy.CriticalIssuesTestSuite do
       rules = JsonRemedy.Layer3.SyntaxNormalization.default_rules()
 
       assert is_list(rules)
-      assert length(rules) > 0
+      assert rules != []
 
       # All processors should be callable
       for rule <- rules do

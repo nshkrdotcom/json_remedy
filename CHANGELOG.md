@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-01-23
+
+### Added
+
+#### **Gemini Echoed Key Pattern Handling**
+New repair for Gemini API bug where keys are echoed/duplicated inside their values.
+- Pattern: `{"coach_notes": "coach_notes": "You showed grace under pressure."}`
+- Fixed: `{"coach_notes": "You showed grace under pressure."}`
+- Handles gemini-2.5-flash-lite and potentially other Gemini models
+- Supports all key naming conventions (snake_case, camelCase, kebab-case)
+- Works with nested objects and arrays
+- Integrated into Layer 1 (Content Cleaning) pipeline
+- New public API: `ContentCleaning.strip_echoed_keys/1`
+
+```elixir
+# Before
+{:error, "Could not repair JSON..."}
+
+# After
+{:ok, %{"coach_notes" => "You showed grace under pressure."}}
+```
+
+Based on: [GitHub Issue #9](https://github.com/nshkrdotcom/json_remedy/issues/9)
+
+### Enhanced
+
+#### **Combined Gemini Issue Handling**
+Both Gemini-specific issues (echoed keys and trailing dots) now work together seamlessly:
+- Pattern: `{"notes": "notes": "Important info.................`
+- Fixed: `{"notes": "Important info"}`
+
 ## [0.2.0] - 2025-12-28
 
 ### Added

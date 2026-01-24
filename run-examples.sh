@@ -16,6 +16,7 @@ failed=0
 # Array of example files (all .exs files in examples/)
 examples=(
   "examples/basic_usage.exs"
+  "examples/gemini_echoed_key_examples.exs"
   "examples/hardcoded_patterns_examples.exs"
   "examples/html_content_examples.exs"
   "examples/html_metadata_examples.exs"

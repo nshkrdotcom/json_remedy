@@ -45,7 +45,7 @@ defmodule JsonRemedy.Layer3.FunctionReferenceTest do
         assert result == expected
 
         if input != expected do
-          assert length(repairs) > 0
+          assert repairs != []
           assert Enum.any?(repairs, &String.contains?(&1.action, "quoted"))
         else
           # May or may not have repairs for already quoted cases
@@ -74,7 +74,7 @@ defmodule JsonRemedy.Layer3.FunctionReferenceTest do
         assert result == expected
 
         if String.contains?(input, "'") and input != expected do
-          assert length(repairs) > 0
+          assert repairs != []
           assert Enum.any?(repairs, &String.contains?(&1.action, "normalized quotes"))
         end
       end
@@ -102,7 +102,7 @@ defmodule JsonRemedy.Layer3.FunctionReferenceTest do
         assert result == expected
 
         if input != expected do
-          assert length(repairs) > 0
+          assert repairs != []
           assert Enum.any?(repairs, &String.contains?(&1.action, "normalized"))
         end
       end
@@ -128,7 +128,7 @@ defmodule JsonRemedy.Layer3.FunctionReferenceTest do
         assert result == expected
 
         if String.contains?(input, ",}") or String.contains?(input, ",]") do
-          assert length(repairs) > 0
+          assert repairs != []
           assert Enum.any?(repairs, &String.contains?(&1.action, "removed trailing comma"))
         end
       end
@@ -385,7 +385,7 @@ defmodule JsonRemedy.Layer3.FunctionReferenceTest do
       # But default_rules should work without undefined function errors
       rules = SyntaxNormalization.default_rules()
       assert is_list(rules)
-      assert length(rules) > 0
+      assert rules != []
 
       # All processor functions should be callable
       for rule <- rules do

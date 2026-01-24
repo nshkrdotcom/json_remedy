@@ -172,7 +172,7 @@ defmodule JsonRemedy.Layer3.StateManagementTest do
         if input != expected and String.contains?(input, "\" \"") and String.contains?(input, "{") do
           # Should add colons where needed (only in JSON object context)
           assert String.length(result) >= String.length(input)
-          assert length(repairs) > 0
+          assert repairs != []
           assert Enum.any?(repairs, &String.contains?(&1.action, "added missing colon"))
         end
 
@@ -213,7 +213,7 @@ defmodule JsonRemedy.Layer3.StateManagementTest do
 
         # Should handle comma issues correctly
         if input != expected do
-          assert length(repairs) > 0
+          assert repairs != []
           # Check for appropriate repair types
           if String.contains?(input, ",}") or String.contains?(input, ",]") do
             assert Enum.any?(repairs, &String.contains?(&1.action, "removed trailing comma"))

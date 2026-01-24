@@ -543,7 +543,7 @@ defmodule JsonRemedy.Layer3.PerformanceStressTest do
         assert String.contains?(result, ":")
         assert String.ends_with?(result, "}")
         assert is_list(context.repairs)
-        assert length(context.repairs) >= 1
+        assert context.repairs != []
       end
 
       # Should have processed all tasks

@@ -12,7 +12,7 @@ defmodule JsonRemedy.Layer3.CriticalIssuesTest do
 
       {result, repairs} = SyntaxNormalization.normalize_quotes(input)
       assert result == expected
-      assert length(repairs) > 0
+      assert repairs != []
     end
 
     test "handles emoji and multi-byte characters" do
@@ -22,7 +22,7 @@ defmodule JsonRemedy.Layer3.CriticalIssuesTest do
 
       {result, repairs} = SyntaxNormalization.normalize_quotes(input)
       assert result == expected
-      assert length(repairs) > 0
+      assert repairs != []
     end
 
     test "handles Chinese/Japanese characters" do
@@ -32,7 +32,7 @@ defmodule JsonRemedy.Layer3.CriticalIssuesTest do
 
       {result, repairs} = SyntaxNormalization.normalize_quotes(input)
       assert result == expected
-      assert length(repairs) > 0
+      assert repairs != []
     end
 
     test "position tracking works with UTF-8" do
@@ -63,7 +63,7 @@ defmodule JsonRemedy.Layer3.CriticalIssuesTest do
 
       {result, repairs} = SyntaxNormalization.quote_unquoted_keys(input)
       assert result == expected
-      assert length(repairs) > 0
+      assert repairs != []
     end
 
     test "normalize_literals preserves UTF-8 content" do
@@ -72,7 +72,7 @@ defmodule JsonRemedy.Layer3.CriticalIssuesTest do
 
       {result, repairs} = SyntaxNormalization.normalize_literals(input)
       assert result == expected
-      assert length(repairs) > 0
+      assert repairs != []
     end
 
     test "full processing preserves UTF-8" do
@@ -299,7 +299,7 @@ defmodule JsonRemedy.Layer3.CriticalIssuesTest do
         assert String.contains?(result, "\\")
         # Should fix syntax issues
         assert String.starts_with?(result, "{\"")
-        assert length(context.repairs) > 0
+        assert context.repairs != []
       end
     end
 

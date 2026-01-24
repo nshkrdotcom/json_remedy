@@ -64,7 +64,7 @@ defmodule JsonRemedy.Layer3.ByteVsStringLengthTest do
       # Should normalize quotes
       expected = "{\"café\": \"naïve résumé\"}"
       assert result == expected
-      assert length(repairs) > 0
+      assert repairs != []
     end
 
     test "quote_unquoted_keys fails on UTF-8 identifiers" do
@@ -219,7 +219,7 @@ defmodule JsonRemedy.Layer3.ByteVsStringLengthTest do
         # Should successfully quote the UTF-8 identifier
         assert String.starts_with?(result, "{\"")
         assert String.contains?(result, "\":")
-        assert length(repairs) > 0
+        assert repairs != []
 
         # Should preserve UTF-8 characters in the identifier
         if String.contains?(input, "café") do
@@ -255,7 +255,7 @@ defmodule JsonRemedy.Layer3.ByteVsStringLengthTest do
         # Should handle whitespace correctly around UTF-8 identifiers
         # Should quote the key
         assert String.contains?(result, "\"")
-        assert length(repairs) > 0
+        assert repairs != []
 
         # Should preserve proper spacing in the output (spaces, tabs, or newlines)
         assert String.contains?(result, ":") &&

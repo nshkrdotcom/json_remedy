@@ -19,7 +19,7 @@ defmodule JsonRemedy.RepairExampleTest do
       {:ok, result, debug_info} ->
         # Should successfully repair - result is the parsed JSON object
         assert is_list(result), "Result should be a JSON array"
-        assert length(result) > 0, "Array should not be empty"
+        assert result != [], "Array should not be empty"
 
         # Should have made repairs
         assert debug_info.total_repairs > 0, "Should have made at least one repair"

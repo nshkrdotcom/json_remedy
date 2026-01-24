@@ -36,7 +36,7 @@ defmodule JsonRemedy.Layer1.ContentCleaningTest do
         {:ok, result, context} = ContentCleaning.process(input, %{repairs: [], options: []})
         # Should contain valid JSON after processing
         assert String.contains?(result, "{\"a\": 1}") or String.contains?(result, "{\"b\": 2}")
-        assert length(context.repairs) > 0
+        assert context.repairs != []
       end
     end
 
@@ -84,7 +84,7 @@ defmodule JsonRemedy.Layer1.ContentCleaningTest do
         {:ok, result, context} = ContentCleaning.process(input, %{repairs: [], options: []})
         assert String.contains?(result, "Alice")
         assert not String.contains?(result, "Comment")
-        assert length(context.repairs) > 0
+        assert context.repairs != []
       end
     end
 
@@ -106,7 +106,7 @@ defmodule JsonRemedy.Layer1.ContentCleaningTest do
         {:ok, result, context} = ContentCleaning.process(input, %{repairs: [], options: []})
         assert String.contains?(result, "Alice")
         assert not String.contains?(result, "Comment")
-        assert length(context.repairs) > 0
+        assert context.repairs != []
       end
     end
 
@@ -171,7 +171,7 @@ defmodule JsonRemedy.Layer1.ContentCleaningTest do
         {:ok, result, context} = ContentCleaning.process(input, %{repairs: [], options: []})
         assert String.contains?(result, "Alice")
         assert not String.contains?(result, "<")
-        assert length(context.repairs) > 0
+        assert context.repairs != []
       end
     end
 
@@ -201,7 +201,7 @@ defmodule JsonRemedy.Layer1.ContentCleaningTest do
       assert String.starts_with?(trimmed_result, "[")
       assert String.ends_with?(trimmed_result, "]")
       assert not String.contains?(result, "1 Volume(s) created")
-      assert length(context.repairs) > 0
+      assert context.repairs != []
       assert hd(context.repairs).action =~ "removed trailing wrapper text"
     end
   end
@@ -354,7 +354,7 @@ defmodule JsonRemedy.Layer1.ContentCleaningTest do
 
       assert String.contains?(result, "Alice")
       assert not String.contains?(result, "Test comment")
-      assert length(repairs) > 0
+      assert repairs != []
       assert hd(repairs).action =~ "removed line comment"
     end
 
@@ -364,7 +364,7 @@ defmodule JsonRemedy.Layer1.ContentCleaningTest do
 
       assert String.contains?(result, "Alice")
       assert not String.contains?(result, "<pre>")
-      assert length(repairs) > 0
+      assert repairs != []
       assert hd(repairs).action =~ "extracted JSON from HTML wrapper"
     end
 

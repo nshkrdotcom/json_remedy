@@ -23,17 +23,19 @@ JsonRemedy - A practical, multi-layered JSON repair library for Elixir that inte
 - ✅ Wrapper text extraction (HTML, prose)
 - ✅ Encoding normalization
 - ✅ Trailing dots truncation (`test/unit/layer1_trailing_dots_test.exs`) *(v0.1.11+)*
+- ✅ Echoed key removal (`test/unit/layer1_echoed_key_test.exs`) *(v0.2.1+)*
 
 **Implementation Status**: **TDD COMPLETE**
-- ✅ Core functionality implemented (35/35 unit tests passing)
+- ✅ Core functionality implemented (65/65 unit tests passing)
 - ✅ LayerBehaviour contract fully implemented
 - ✅ All required callbacks: `process/2`, `supports?/1`, `priority/0`, `name/0`, `validate_options/1`
-- ✅ Public API functions: `strip_comments/1`, `extract_json_content/1`, `normalize_encoding/1`, `strip_trailing_dots/1`
+- ✅ Public API functions: `strip_comments/1`, `extract_json_content/1`, `normalize_encoding/1`, `strip_trailing_dots/1`, `strip_echoed_keys/1`
 - ✅ Context-aware processing that preserves string content
 - ✅ Performance tests passing (4/4 tests, all functions under performance thresholds)
 - ✅ Code quality checks passing (Credo, mix format)
 - ✅ Type specifications and documentation complete
 - ✅ **Trailing dots handling** (v0.1.11): Detects and strips Gemini max_output_tokens truncation pattern
+- ✅ **Echoed key handling** (v0.2.1): Detects and strips Gemini echoed key bug pattern
 
 ### Phase 3: Layer 2 - Structural Repair ✅ COMPLETED  
 **Goal**: Fix missing/extra delimiters using state machine for context tracking
@@ -231,7 +233,7 @@ State machine approach preserves JSON semantics:
 
 ### ✅ **COMPLETED PHASES (5 of 7)**
 1. **✅ Phase 1**: Foundation & Interfaces - All contracts and specifications defined
-2. **✅ Phase 2**: Layer 1 Content Cleaning - 21/21 tests passing, full TDD cycle complete
+2. **✅ Phase 2**: Layer 1 Content Cleaning - 65/65 tests passing, full TDD cycle complete (includes echoed key handling v0.2.1)
 3. **✅ Phase 3**: Layer 2 Structural Repair - 20/23 tests passing (87% success), production ready
 4. **✅ Phase 4**: Layer 3 Syntax Normalization - 28/28 tests passing (100% success), full TDD cycle complete
 5. **✅ Phase 5**: Core Context Management - 41 context + 13 integration tests passing, full TDD cycle complete
@@ -241,12 +243,13 @@ State machine approach preserves JSON semantics:
 - **✅ Critical Test Suite**: 82/82 tests passing with 0 failures
 - **✅ Type Safety**: Zero Dialyzer warnings across entire codebase
 - **✅ UTF-8 Support**: Full internationalization support implemented
-- **✅ Production Ready**: Core 3-layer pipeline battle-tested and robust
+- **✅ Production Ready**: Core 4-layer pipeline battle-tested and robust
 
 ### 📊 **Current Statistics**
-- **Total Test Suite**: 660 tests passing, 0 failures (63 excluded)
+- **Total Test Suite**: 718 tests passing, 0 failures (64 excluded)
 - **Critical Tests**: 82 tests passing, 0 failures (19 excluded)
 - **Layer 4 Tests**: 201 tests passing, 0 failures
+- **Layer 1 Tests**: 65 tests passing (includes echoed key handling)
 - **Unit Tests**: 100+ tests across all layers
 - **Success Rate**: 100% test success across all implemented layers
 - **Code Quality**: Zero compiler warnings, zero type errors
@@ -254,13 +257,14 @@ State machine approach preserves JSON semantics:
 
 ### 🏗️ **Architecture Status**
 The core 4-layer repair pipeline is **production-ready** and **battle-tested**:
-- **Layer 1**: Content cleaning (comments, fences, wrappers) ✅
-- **Layer 2**: Structural repair (delimiters, nesting) ✅  
+- **Layer 1**: Content cleaning (comments, fences, wrappers, echoed keys, trailing dots) ✅
+- **Layer 2**: Structural repair (delimiters, nesting) ✅
 - **Layer 3**: Syntax normalization (quotes, booleans, commas) ✅ **with UTF-8 support**
 - **Layer 4**: Validation (Jason.decode optimization) ✅ **with fast/slow path**
 - **Layer 5**: Tolerant parsing (edge case fallback) 📋
 
 ### 🎉 **Recent Major Achievements**
+- **Gemini Echoed Key Handling (v0.2.1)**: Handles `{"key": "key": "value"}` pattern from gemini-2.5-flash-lite
 - **Layer 4 Validation Complete**: 201/201 tests passing with full fast path optimization
 - **Complete Pipeline**: 4-layer JSON repair pipeline fully implemented and tested
 - **Critical Test Suite Resolution**: From 8 failing tests to 82 passing tests
@@ -268,14 +272,15 @@ The core 4-layer repair pipeline is **production-ready** and **battle-tested**:
 - **Type Safety Excellence**: Zero Dialyzer warnings with comprehensive type checking
 - **Defensive Programming**: Robust nil input handling throughout the codebase
 - **Code Quality Standards**: Zero warnings, comprehensive documentation, production-ready code
-- **Test Coverage Excellence**: 660 total tests with 100% success rate
+- **Test Coverage Excellence**: 718 total tests with 100% success rate
 
 ## Key Commands
-- `mix test` - Run all tests (660 tests, 0 failures)
+- `mix test` - Run all tests (718 tests, 0 failures)
 - `mix test test/critical` - Run critical test suite (82 tests)
 - `mix test test/layer4` - Run Layer 4 validation tests (201 tests)
+- `mix test test/unit/layer1_echoed_key_test.exs` - Run echoed key tests (30 tests)
 - `mix test test/unit/layer1_content_cleaning_test.exs` - Run Layer 1 tests
-- `mix test test/unit/layer2_structural_repair_test.exs` - Run Layer 2 tests  
+- `mix test test/unit/layer2_structural_repair_test.exs` - Run Layer 2 tests
 - `mix test test/unit/layer3_syntax_normalization_test.exs` - Run Layer 3 tests
 - `mix test test/unit/context/` - Run context management tests
 - `mix test test/integration/` - Run integration tests

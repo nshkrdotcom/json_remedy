@@ -37,7 +37,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalizationTest do
       for {input, expected} <- test_cases do
         {:ok, result, context} = SyntaxNormalization.process(input, %{repairs: [], options: []})
         assert result == expected
-        assert length(context.repairs) > 0
+        assert context.repairs != []
       end
     end
 
@@ -129,7 +129,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalizationTest do
       for {input, expected} <- test_cases do
         {:ok, result, context} = SyntaxNormalization.process(input, %{repairs: [], options: []})
         assert result == expected
-        assert length(context.repairs) > 0
+        assert context.repairs != []
       end
     end
 
@@ -302,7 +302,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalizationTest do
       {result, repairs} = SyntaxNormalization.normalize_quotes(input)
 
       assert result == "{\"name\": \"Alice\"}"
-      assert length(repairs) > 0
+      assert repairs != []
       assert hd(repairs).action =~ "normalized quotes"
     end
 
@@ -311,7 +311,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalizationTest do
       {result, repairs} = SyntaxNormalization.normalize_booleans(input)
 
       assert result == "{\"active\": true}"
-      assert length(repairs) > 0
+      assert repairs != []
       assert hd(repairs).action =~ "normalized boolean"
     end
 
@@ -320,7 +320,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalizationTest do
       {result, repairs} = SyntaxNormalization.fix_commas(input)
 
       assert result == "{\"name\": \"Alice\"}"
-      assert length(repairs) > 0
+      assert repairs != []
       assert hd(repairs).action =~ "removed trailing comma"
     end
 
@@ -328,7 +328,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalizationTest do
       rules = SyntaxNormalization.default_rules()
 
       assert is_list(rules)
-      assert length(rules) > 0
+      assert rules != []
 
       # Check that all rules are well-formed
       for rule <- rules do
@@ -443,7 +443,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalizationTest do
 
         if input != expected do
           assert result == expected
-          assert length(repairs) > 0
+          assert repairs != []
         else
           assert result == input
           assert repairs == []
@@ -465,7 +465,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalizationTest do
       for {input, expected} <- test_cases do
         {result, repairs} = SyntaxNormalization.normalize_literals(input)
         assert result == expected
-        assert length(repairs) > 0
+        assert repairs != []
       end
 
       # Test with no literals to normalize
@@ -483,7 +483,7 @@ defmodule JsonRemedy.Layer3.SyntaxNormalizationTest do
       for {input, expected} <- test_cases do
         {result, repairs} = SyntaxNormalization.fix_colons(input)
         assert result == expected
-        assert length(repairs) > 0
+        assert repairs != []
         assert Enum.any?(repairs, &String.contains?(&1.action, "added missing colon"))
       end
     end

@@ -108,7 +108,7 @@ defmodule JsonRemedy.Layer2.StructuralRepairTest do
         assert result == expected
 
         if input != expected do
-          assert length(context.repairs) > 0
+          assert context.repairs != []
         end
       end
     end
@@ -197,7 +197,7 @@ defmodule JsonRemedy.Layer2.StructuralRepairTest do
         assert result == expected
 
         if input != expected do
-          assert length(context.repairs) > 0
+          assert context.repairs != []
         end
       end
     end
@@ -299,7 +299,7 @@ defmodule JsonRemedy.Layer2.StructuralRepairTest do
 
       # Should fix both missing brace and mismatched delimiter
       assert result == "{\"users\": [{\"name\": \"Alice\"}, {\"name\": \"Bob\"}]}"
-      assert length(context.repairs) >= 1
+      assert context.repairs != []
     end
 
     test "preserves valid nested structures" do

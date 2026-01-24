@@ -1,7 +1,7 @@
 defmodule JsonRemedy.MixProject do
   use Mix.Project
 
-  @version "0.2.0"
+  @version "0.2.1"
   @source_url "https://github.com/nshkrdotcom/json_remedy"
 
   def project do
@@ -58,7 +58,7 @@ defmodule JsonRemedy.MixProject do
         "GitHub" => @source_url,
         "Documentation" => "https://hexdocs.pm/json_remedy"
       },
-      files: ~w(lib .formatter.exs mix.exs README.md CHANGELOG.md LICENSE assets)
+      files: ~w(lib .formatter.exs mix.exs README.md CHANGELOG.md LICENSE)
     ]
   end
 

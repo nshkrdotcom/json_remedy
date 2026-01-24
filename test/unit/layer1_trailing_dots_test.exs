@@ -21,7 +21,7 @@ defmodule JsonRemedy.Layer1.TrailingDotsTest do
       # Should strip trailing dots
       refute String.contains?(result, "................")
       assert String.ends_with?(result, "Some text")
-      assert length(context.repairs) > 0
+      assert context.repairs != []
 
       repair_actions = Enum.map(context.repairs, & &1.action)
       assert Enum.any?(repair_actions, &String.contains?(&1, "trailing dots"))
@@ -38,7 +38,7 @@ defmodule JsonRemedy.Layer1.TrailingDotsTest do
       # Should strip all trailing dots
       refute String.contains?(result, "..........")
       assert String.length(result) < 100
-      assert length(context.repairs) > 0
+      assert context.repairs != []
     end
 
     test "preserves dots inside string values" do
@@ -64,7 +64,7 @@ defmodule JsonRemedy.Layer1.TrailingDotsTest do
 
       # Should strip trailing dots (outside string content)
       refute String.ends_with?(result, "....")
-      assert length(context.repairs) > 0
+      assert context.repairs != []
     end
 
     test "handles truncated array with trailing dots" do
@@ -164,7 +164,7 @@ defmodule JsonRemedy.Layer1.TrailingDotsTest do
       # Few dots might be intentional (edge case), many dots definitely truncation
       assert String.ends_with?(String.trim(result_many), "}")
       refute String.ends_with?(String.trim(result_many), "....")
-      assert length(context_many.repairs) > 0
+      assert context_many.repairs != []
     end
   end
 
@@ -177,7 +177,7 @@ defmodule JsonRemedy.Layer1.TrailingDotsTest do
         {:ok, result, repairs} ->
           # Should produce valid JSON
           assert is_map(result) or is_list(result)
-          assert length(repairs) > 0
+          assert repairs != []
 
         {:error, _reason} ->
           # If repair fails, at least Layer 1 should have stripped dots
@@ -196,7 +196,7 @@ defmodule JsonRemedy.Layer1.TrailingDotsTest do
       # Should repair to valid structure
       assert is_map(result) or is_list(result)
       # Should have repairs from both Layer 1 (dots) and Layer 2 (structure)
-      assert length(repairs) >= 1
+      assert repairs != []
     end
   end
 end

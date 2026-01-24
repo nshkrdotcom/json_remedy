@@ -51,6 +51,11 @@ Malformed JSON is everywhere in real-world systems:
 ```
 
 ```text
+// Gemini API echoed key bug (gemini-2.5-flash-lite)
+{"coach_notes": "coach_notes": "You showed grace under pressure."}
+```
+
+```text
 // Human input with common mistakes
 {name: Alice, "age": 30, "scores": [95 87 92], active: true,}
 ```
@@ -78,6 +83,9 @@ Runs **before** the main layer pipeline to handle complex patterns that would ot
 - **Trailing dots truncation**: `{"key": "val............` → `{"key": "val` *(v0.1.11+)*
   - Handles Gemini API `max_output_tokens` truncation pattern
   - Strips 10+ consecutive dots while preserving legitimate ellipsis
+- **Echoed key removal**: `{"key": "key": "value"}` → `{"key": "value"}` *(v0.2.1+)*
+  - Handles Gemini API (gemini-2.5-flash-lite) duplicate key bug
+  - Supports all key naming conventions (snake_case, camelCase, kebab-case)
 - **Encoding normalization**: UTF-8 handling and cleanup
 
 ### 🏗️ **Structural Repairs (Layer 2)**
@@ -168,7 +176,7 @@ Add JsonRemedy to your `mix.exs`:
 ```elixir
 def deps do
   [
-    {:json_remedy, "~> 0.2.0"}
+    {:json_remedy, "~> 0.2.1"}
   ]
 end
 ```

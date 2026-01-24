@@ -230,7 +230,7 @@ defmodule JsonRemedy.MissingPatterns.PythonRecentCasesTest do
 
       assert {:ok, result, repairs} = JsonRemedy.repair(input, logging: true)
       assert result == %{"key" => "value"}
-      assert length(repairs) > 0
+      assert repairs != []
     end
   end
 
@@ -238,7 +238,7 @@ defmodule JsonRemedy.MissingPatterns.PythonRecentCasesTest do
     test "repairs the sample invalid file" do
       assert {:ok, result} = JsonRemedy.from_file("test/data/invalid.json")
       assert is_list(result)
-      assert length(result) > 0
+      assert result != []
     end
 
     test "logging returns repairs when reading from file" do
@@ -248,7 +248,7 @@ defmodule JsonRemedy.MissingPatterns.PythonRecentCasesTest do
 
       assert {:ok, result, repairs} = JsonRemedy.from_file(path, logging: true)
       assert result == %{"key" => "value"}
-      assert length(repairs) > 0
+      assert repairs != []
     end
 
     test "large non-json file returns empty result in logging mode" do
