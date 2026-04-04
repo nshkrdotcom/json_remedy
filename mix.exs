@@ -42,7 +42,7 @@ defmodule JsonRemedy.MixProject do
       {:benchee, "~> 1.1", only: :dev},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.3", only: [:dev], runtime: false},
-      {:ex_doc, "~> 0.30", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.40", only: :dev, runtime: false}
     ]
   end
 
@@ -58,7 +58,7 @@ defmodule JsonRemedy.MixProject do
         "GitHub" => @source_url,
         "Documentation" => "https://hexdocs.pm/json_remedy"
       },
-      files: ~w(lib .formatter.exs mix.exs README.md CHANGELOG.md LICENSE)
+      files: ~w(lib assets .formatter.exs mix.exs README.md CHANGELOG.md LICENSE)
     ]
   end
 
